@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "ServiceBusExplorer",
+  "project_id": "da11d9df-9c8a-48c8-a267-450c73265cb6"
+}

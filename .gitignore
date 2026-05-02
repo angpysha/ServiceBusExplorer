@@ -169,3 +169,8 @@ $RECYCLE.BIN/
 
 # Event Grid Explorer Library pkgrefgen
 /src/EventGridExplorerLibrary/.pkgrefgen/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
