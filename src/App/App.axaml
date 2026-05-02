@@ -1,0 +1,38 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             xmlns:local="using:ServiceBusExplorer.App"
+             xmlns:connect="using:ServiceBusExplorer.App.Views.Connect"
+             xmlns:mainView="using:ServiceBusExplorer.App.Views.Main"
+             xmlns:dash="using:ServiceBusExplorer.App.Views.Dashboard"
+             x:Class="ServiceBusExplorer.App.App">
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+  <Application.DataTemplates>
+    <DataTemplate DataType="{x:Type vm:ConnectViewModel}">
+      <connect:ConnectView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type local:AppMainViewModel}">
+      <mainView:MainContentView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
+      <dash:DashboardView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:QueueListViewModel}">
+      <TextBlock Text="Queues — full list view coming in Phase 4" Margin="20" />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:TopicListViewModel}">
+      <TextBlock Text="Topics — full list view coming in Phase 4" Margin="20" />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:EventHubListViewModel}">
+      <TextBlock Text="Event Hubs — full list view coming in Phase 4" Margin="20" />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:RelayListViewModel}">
+      <TextBlock Text="Relays — full list view coming in Phase 4" Margin="20" />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:NotificationHubListViewModel}">
+      <TextBlock Text="Notification Hubs — full list view coming in Phase 4" Margin="20" />
+    </DataTemplate>
+  </Application.DataTemplates>
+</Application>

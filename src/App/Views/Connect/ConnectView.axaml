@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             x:DataType="vm:ConnectViewModel"
+             x:Class="ServiceBusExplorer.App.Views.Connect.ConnectView">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <Grid RowDefinitions="Auto,*">
+
+      <!-- Header -->
+      <Border Grid.Row="0" Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}" Padding="20,16">
+        <TextBlock Text="Service Bus Explorer"
+                   FontSize="22" FontWeight="SemiBold"
+                   HorizontalAlignment="Center" />
+      </Border>
+
+      <!-- Form -->
+      <StackPanel Grid.Row="1"
+                  MaxWidth="520"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Spacing="8"
+                  Margin="24">
+
+        <TextBlock Text="Connection String" FontWeight="SemiBold" Margin="0,8,0,2" />
+        <TextBox Text="{Binding ConnectionString}"
+                 Watermark="Endpoint=sb://namespace.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=..." />
+
+        <TextBlock Text="Authentication" FontWeight="SemiBold" Margin="0,8,0,2" />
+        <ComboBox ItemsSource="{x:Static vm:ConnectViewModel.AuthModes}"
+                  SelectedItem="{Binding AuthMode}"
+                  HorizontalAlignment="Stretch" />
+
+        <TextBlock Text="Tenant ID (optional, for AAD)" Margin="0,8,0,2" />
+        <TextBox Text="{Binding TenantId}" Watermark="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+
+        <TextBlock Text="Entity Path (optional)" Margin="0,8,0,2" />
+        <TextBox Text="{Binding EntityPath}" Watermark="queue-or-topic-name" />
+
+        <TextBlock Text="Load entity types" FontWeight="SemiBold" Margin="0,12,0,4" />
+        <WrapPanel Orientation="Horizontal">
+          <CheckBox IsChecked="{Binding LoadQueues}" Content="Queues" Margin="0,0,16,4" />
+          <CheckBox IsChecked="{Binding LoadTopics}" Content="Topics" Margin="0,0,16,4" />
+          <CheckBox IsChecked="{Binding LoadEventHubs}" Content="Event Hubs" Margin="0,0,16,4" />
+          <CheckBox IsChecked="{Binding LoadRelays}" Content="Relays" Margin="0,0,16,4" />
+          <CheckBox IsChecked="{Binding LoadNotificationHubs}" Content="Notification Hubs" Margin="0,0,16,4" />
+        </WrapPanel>
+
+        <TextBlock Text="{Binding ErrorMessage}"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   TextWrapping="Wrap"
+                   Margin="0,8,0,0" />
+
+        <Button Content="Connect"
+                Command="{Binding ConnectCommand}"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Center"
+                Margin="0,12,0,0"
+                Padding="0,10" />
+
+        <TextBlock Text="Connecting…"
+                   IsVisible="{Binding IsConnecting}"
+                   HorizontalAlignment="Center"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+      </StackPanel>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

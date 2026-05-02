@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             x:DataType="vm:DashboardViewModel"
+             x:Class="ServiceBusExplorer.App.Views.Dashboard.DashboardView">
+  <Grid RowDefinitions="Auto,Auto,*">
+
+    <!-- Header -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12,16,8" Spacing="12">
+      <TextBlock Text="Dashboard" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Content="Refresh" Command="{Binding RefreshCommand}" VerticalAlignment="Center" />
+      <TextBlock Text="Loading…"
+                 IsVisible="{Binding IsLoading}"
+                 VerticalAlignment="Center"
+                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+    </StackPanel>
+
+    <!-- Column headers -->
+    <Grid Grid.Row="1"
+          ColumnDefinitions="*,100,100,100,100"
+          Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
+          Margin="16,0">
+      <TextBlock Grid.Column="0" Text="Name" FontWeight="SemiBold" Padding="8,6" />
+      <TextBlock Grid.Column="1" Text="Type" FontWeight="SemiBold" Padding="8,6" />
+      <TextBlock Grid.Column="2" Text="Active" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
+      <TextBlock Grid.Column="3" Text="Dead Letter" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
+      <TextBlock Grid.Column="4" Text="Sched/Subs" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
+    </Grid>
+
+    <!-- Rows -->
+    <ListBox Grid.Row="2"
+             ItemsSource="{Binding Rows}"
+             Margin="16,0"
+             Background="Transparent"
+             BorderThickness="0">
+      <ListBox.ItemTemplate>
+        <DataTemplate DataType="{x:Type vm:DashboardRow}">
+          <Grid ColumnDefinitions="*,100,100,100,100">
+            <TextBlock Grid.Column="0" Text="{Binding Name}" Padding="8,4" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding Type}" Padding="8,4" VerticalAlignment="Center"
+                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+            <TextBlock Grid.Column="2" Text="{Binding Active}" Padding="8,4" VerticalAlignment="Center"
+                       HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="3" Text="{Binding DeadLetter}" Padding="8,4" VerticalAlignment="Center"
+                       HorizontalAlignment="Right"
+                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}" />
+            <TextBlock Grid.Column="4" Text="{Binding Scheduled}" Padding="8,4" VerticalAlignment="Center"
+                       HorizontalAlignment="Right" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+</UserControl>

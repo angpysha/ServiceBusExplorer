@@ -1,0 +1,10 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:ServiceBusExplorer.App"
+        x:Class="ServiceBusExplorer.App.Views.MainWindow"
+        x:DataType="local:MainWindowViewModel"
+        Title="Service Bus Explorer"
+        Width="1100" Height="720"
+        MinWidth="800" MinHeight="550">
+  <ContentControl Content="{Binding CurrentPage}" />
+</Window>

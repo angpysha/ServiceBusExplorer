@@ -39,6 +39,7 @@ public class MainViewModel : ReactiveObject
     public EventHubListViewModel EventHubs { get; }
     public RelayListViewModel Relays { get; }
     public NotificationHubListViewModel NotificationHubs { get; }
+    public DashboardViewModel Dashboard { get; }
 
     public ReactiveCommand<ConnectionOptions, Unit> ConnectCommand { get; }
     public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
@@ -49,13 +50,15 @@ public class MainViewModel : ReactiveObject
         TopicListViewModel topics,
         EventHubListViewModel eventHubs,
         RelayListViewModel relays,
-        NotificationHubListViewModel notificationHubs)
+        NotificationHubListViewModel notificationHubs,
+        DashboardViewModel dashboard)
     {
         Queues = queues;
         Topics = topics;
         EventHubs = eventHubs;
         Relays = relays;
         NotificationHubs = notificationHubs;
+        Dashboard = dashboard;
 
         ConnectCommand = ReactiveCommand.CreateFromTask<ConnectionOptions, Unit>(async opts =>
         {

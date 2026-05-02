@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:ServiceBusExplorer.App"
+             x:DataType="local:AppMainViewModel"
+             x:Class="ServiceBusExplorer.App.Views.Main.MainContentView">
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- Title bar -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
+            Padding="16,10">
+      <TextBlock Text="{Binding NamespaceName}"
+                 FontSize="16" FontWeight="SemiBold"
+                 VerticalAlignment="Center" />
+    </Border>
+
+    <!-- Content with sidebar -->
+    <Grid Grid.Row="1" ColumnDefinitions="220,Auto,*">
+
+      <!-- Navigation sidebar -->
+      <Border Grid.Column="0"
+              Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+              BorderThickness="0,0,1,0">
+        <ListBox ItemsSource="{Binding NavItems}"
+                 SelectedItem="{Binding SelectedNavItem}"
+                 Margin="0,8">
+          <ListBox.ItemTemplate>
+            <DataTemplate DataType="{x:Type local:NavItem}">
+              <TextBlock Text="{Binding Label}" Padding="8,6" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Border>
+
+      <!-- Splitter -->
+      <GridSplitter Grid.Column="1" Width="4" ResizeBehavior="PreviousAndNext" />
+
+      <!-- Main content area -->
+      <ContentControl Grid.Column="2" Content="{Binding CurrentContent}" />
+    </Grid>
+  </Grid>
+</UserControl>
