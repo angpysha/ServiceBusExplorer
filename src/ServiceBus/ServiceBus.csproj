@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
+		<TargetFramework>net10.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
 		<AssemblyName>ServiceBusExplorer.ServiceBus</AssemblyName>
 		<AssemblyVersion>1.0.0.1</AssemblyVersion>
     <NoWarn>7035</NoWarn>

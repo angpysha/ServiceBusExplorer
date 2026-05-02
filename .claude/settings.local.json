@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(git mv *)",
+      "Bash(xargs -I{} head -2 {})",
+      "Bash(wait)",
+      "Bash(git -C /Volumes/CoreProjects/OpenSourced/ServiceBusExplorer status)",
+      "Bash(git -C /Volumes/CoreProjects/OpenSourced/ServiceBusExplorer diff --stat HEAD)",
+      "Bash(git add *)"
+    ]
+  }
+}

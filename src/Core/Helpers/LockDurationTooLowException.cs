@@ -22,17 +22,14 @@
 #region Using Directives
 
 using System;
-using System.Runtime.Serialization;
 
 #endregion
 
 
 namespace ServiceBusExplorer.Helpers
 {
-    [Serializable]
     public class LockDurationTooLowException : Exception
     {
-        #region Public constructors
         public LockDurationTooLowException()
         {
         }
@@ -44,12 +41,5 @@ namespace ServiceBusExplorer.Helpers
         public LockDurationTooLowException(string message, Exception innerException) : base(message, innerException)
         {
         }
-        #endregion
-
-        #region Protected constructor
-        protected LockDurationTooLowException(SerializationInfo info, StreamingContext context) : base(info, context)
-        {
-        }
-        #endregion
     }
 }

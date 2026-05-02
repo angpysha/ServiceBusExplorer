@@ -34,7 +34,6 @@
     <Reference Include="System.ServiceModel" />
     <Reference Include="System.Web" />
     <Reference Include="System.Web.Extensions" />
-    <Reference Include="System.Windows.Forms" />
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
@@ -46,12 +45,5 @@
       <Link>AssemblyDependencyValidation.layerdiagram</Link>
       <Visible>False</Visible>
     </AdditionalFiles>
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\EventGridExplorerLibrary\EventGridExplorerLibrary.csproj" />
-    <ProjectReference Include="..\EventHubs\EventHubs.csproj" />
-    <ProjectReference Include="..\Relay\Relay.csproj" />
-    <ProjectReference Include="..\ServiceBus\ServiceBus.csproj" />
-    <ProjectReference Include="..\Utilities\Utilities.csproj" />
   </ItemGroup>
 </Project>
