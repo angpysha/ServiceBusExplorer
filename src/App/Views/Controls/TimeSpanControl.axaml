@@ -2,13 +2,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="ServiceBusExplorer.App.Views.Controls.TimeSpanControl">
   <StackPanel Orientation="Horizontal" Spacing="4">
-    <NumericUpDown x:Name="DaysBox"   Minimum="0" Maximum="36500" Width="72" FormatString="0" />
+    <NumericUpDown x:Name="DaysBox"    Minimum="0" Maximum="36500" Width="72" />
     <TextBlock Text="d" VerticalAlignment="Center" Opacity="0.6" />
-    <NumericUpDown x:Name="HoursBox"  Minimum="0" Maximum="23"    Width="60" FormatString="0" />
+    <NumericUpDown x:Name="HoursBox"   Minimum="0" Maximum="23"    Width="60" />
     <TextBlock Text="h" VerticalAlignment="Center" Opacity="0.6" />
-    <NumericUpDown x:Name="MinutesBox" Minimum="0" Maximum="59"   Width="60" FormatString="0" />
+    <NumericUpDown x:Name="MinutesBox" Minimum="0" Maximum="59"    Width="60" />
     <TextBlock Text="m" VerticalAlignment="Center" Opacity="0.6" />
-    <NumericUpDown x:Name="SecondsBox" Minimum="0" Maximum="59"   Width="60" FormatString="0" />
+    <NumericUpDown x:Name="SecondsBox" Minimum="0" Maximum="59"    Width="60" />
     <TextBlock Text="s" VerticalAlignment="Center" Opacity="0.6" />
   </StackPanel>
 </UserControl>

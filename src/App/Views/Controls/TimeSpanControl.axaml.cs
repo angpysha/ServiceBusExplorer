@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using System.Reactive.Linq;
 
 namespace ServiceBusExplorer.App.Views.Controls;
 
@@ -21,7 +22,8 @@ public partial class TimeSpanControl : UserControl
     {
         InitializeComponent();
 
-        ValueProperty.Changed.AddClassHandler<TimeSpanControl>((ctrl, _) => ctrl.SyncFromValue());
+        // Per-instance subscription (not class handler, which accumulates across instances)
+        this.GetObservable(ValueProperty).Subscribe(_ => SyncFromValue());
 
         DaysBox.ValueChanged    += (_, _) => SyncToValue();
         HoursBox.ValueChanged   += (_, _) => SyncToValue();
@@ -33,21 +35,35 @@ public partial class TimeSpanControl : UserControl
     {
         if (_updating) return;
         _updating = true;
-        var ts = Value;
-        DaysBox.Value    = ts.Days;
-        HoursBox.Value   = ts.Hours;
-        MinutesBox.Value = ts.Minutes;
-        SecondsBox.Value = ts.Seconds;
-        _updating = false;
+        try
+        {
+            var ts = Value;
+            DaysBox.Value    = ts.Days;
+            HoursBox.Value   = ts.Hours;
+            MinutesBox.Value = ts.Minutes;
+            SecondsBox.Value = ts.Seconds;
+        }
+        finally
+        {
+            _updating = false;
+        }
     }
 
     private void SyncToValue()
     {
         if (_updating) return;
-        var days    = (int)(DaysBox.Value    ?? 0);
-        var hours   = (int)(HoursBox.Value   ?? 0);
-        var minutes = (int)(MinutesBox.Value ?? 0);
-        var seconds = (int)(SecondsBox.Value ?? 0);
-        Value = new TimeSpan(days, hours, minutes, seconds);
+        _updating = true;
+        try
+        {
+            var days    = (int)(DaysBox.Value    ?? 0);
+            var hours   = (int)(HoursBox.Value   ?? 0);
+            var minutes = (int)(MinutesBox.Value ?? 0);
+            var seconds = (int)(SecondsBox.Value ?? 0);
+            Value = new TimeSpan(days, hours, minutes, seconds);
+        }
+        finally
+        {
+            _updating = false;
+        }
     }
 }
