@@ -18,9 +18,15 @@ public class SubscriptionService : ISubscriptionService
 
     public async Task<IReadOnlyList<SubscriptionInfo>> ListAsync(string topicName, CancellationToken ct = default)
     {
+        var runtimeMap = new Dictionary<string, SubscriptionRuntimeProperties>();
+        await foreach (var r in _admin.GetSubscriptionsRuntimePropertiesAsync(topicName, ct))
+            runtimeMap[r.SubscriptionName] = r;
         var results = new List<SubscriptionInfo>();
-        await foreach (var props in _admin.GetSubscriptionsRuntimePropertiesAsync(topicName, ct))
-            results.Add(MapRuntime(topicName, props));
+        await foreach (var p in _admin.GetSubscriptionsAsync(topicName, ct))
+        {
+            if (runtimeMap.TryGetValue(p.SubscriptionName, out var runtime))
+                results.Add(MapFull(p, runtime));
+        }
         return results;
     }
 
@@ -49,6 +55,14 @@ public class SubscriptionService : ISubscriptionService
         var props = existing.Value;
         props.LockDuration = updated.LockDuration;
         props.MaxDeliveryCount = updated.MaxDeliveryCount;
+        props.DefaultMessageTimeToLive = updated.DefaultMessageTimeToLive == default ? props.DefaultMessageTimeToLive : updated.DefaultMessageTimeToLive;
+        props.AutoDeleteOnIdle = updated.AutoDeleteOnIdle == default ? props.AutoDeleteOnIdle : updated.AutoDeleteOnIdle;
+        props.EnableBatchedOperations = updated.EnableBatchedOperations;
+        props.DeadLetteringOnMessageExpiration = updated.EnableDeadLetteringOnMessageExpiration;
+        props.EnableDeadLetteringOnFilterEvaluationExceptions = updated.EnableDeadLetteringOnFilterEvaluationExceptions;
+        if (updated.ForwardTo != null) props.ForwardTo = updated.ForwardTo;
+        if (updated.ForwardDeadLetteredMessagesTo != null) props.ForwardDeadLetteredMessagesTo = updated.ForwardDeadLetteredMessagesTo;
+        if (updated.UserMetadata != null) props.UserMetadata = updated.UserMetadata;
         props.Status = MapStatus(updated.Status);
 
         var result = await _admin.UpdateSubscriptionAsync(props, ct);
@@ -87,13 +101,22 @@ public class SubscriptionService : ISubscriptionService
         CancellationToken ct = default) =>
         await _admin.DeleteRuleAsync(topicName, subscriptionName, ruleName, ct);
 
-    private static SubscriptionInfo MapRuntime(string topicName, SubscriptionRuntimeProperties p) => new(
-        topicName, p.SubscriptionName, p.ActiveMessageCount, p.DeadLetterMessageCount,
-        TimeSpan.Zero, 10, CoreEntityStatus.Unknown);
-
     private static SubscriptionInfo MapFull(SubscriptionProperties p, SubscriptionRuntimeProperties r) => new(
-        p.TopicName, p.SubscriptionName, r.ActiveMessageCount, r.DeadLetterMessageCount,
-        p.LockDuration, p.MaxDeliveryCount, MapEntityStatus(p.Status));
+        TopicName: p.TopicName,
+        Name: p.SubscriptionName,
+        ActiveMessageCount: r.ActiveMessageCount,
+        DeadLetterCount: r.DeadLetterMessageCount,
+        LockDuration: p.LockDuration,
+        MaxDeliveryCount: p.MaxDeliveryCount,
+        Status: MapEntityStatus(p.Status),
+        DefaultMessageTimeToLive: p.DefaultMessageTimeToLive,
+        AutoDeleteOnIdle: p.AutoDeleteOnIdle,
+        EnableBatchedOperations: p.EnableBatchedOperations,
+        ForwardTo: string.IsNullOrEmpty(p.ForwardTo) ? null : p.ForwardTo,
+        ForwardDeadLetteredMessagesTo: string.IsNullOrEmpty(p.ForwardDeadLetteredMessagesTo) ? null : p.ForwardDeadLetteredMessagesTo,
+        UserMetadata: string.IsNullOrEmpty(p.UserMetadata) ? null : p.UserMetadata,
+        EnableDeadLetteringOnMessageExpiration: p.DeadLetteringOnMessageExpiration,
+        EnableDeadLetteringOnFilterEvaluationExceptions: p.EnableDeadLetteringOnFilterEvaluationExceptions);
 
     private static RuleInfo MapRule(RuleProperties r)
     {

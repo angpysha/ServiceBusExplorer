@@ -11,8 +11,22 @@ public class NotificationHubListViewModel : ReactiveObject
     private readonly SourceList<NotificationHubInfo> _source = new();
     private bool _isLoading;
     private string? _error;
+    private NotificationHubInfo? _selectedHub;
+    private NotificationHubDetailViewModel? _selectedDetail;
 
     public ReadOnlyObservableCollection<NotificationHubInfo> NotificationHubs { get; }
+
+    public NotificationHubInfo? SelectedHub
+    {
+        get => _selectedHub;
+        set => this.RaiseAndSetIfChanged(ref _selectedHub, value);
+    }
+
+    public NotificationHubDetailViewModel? SelectedDetail
+    {
+        get => _selectedDetail;
+        private set => this.RaiseAndSetIfChanged(ref _selectedDetail, value);
+    }
 
     public bool IsLoading
     {
@@ -33,6 +47,15 @@ public class NotificationHubListViewModel : ReactiveObject
     public NotificationHubListViewModel(INotificationHubService svc)
     {
         _svc = svc;
+
+        this.WhenAnyValue(x => x.SelectedHub)
+            .Subscribe(h =>
+            {
+                var detail = h == null ? null : new NotificationHubDetailViewModel(_svc, h.Name);
+                if (detail != null)
+                    detail.NavigateBackRequested.Subscribe(_ => SelectedHub = null);
+                SelectedDetail = detail;
+            });
 
         _source.Connect()
             .Bind(out var bound)

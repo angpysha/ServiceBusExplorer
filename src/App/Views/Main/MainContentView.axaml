@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:ServiceBusExplorer.App"
+             xmlns:vm="using:ServiceBusExplorer.ViewModels"
              x:DataType="local:AppMainViewModel"
              x:Class="ServiceBusExplorer.App.Views.Main.MainContentView">
   <Grid RowDefinitions="Auto,*">
@@ -15,22 +16,134 @@
     </Border>
 
     <!-- Content with sidebar -->
-    <Grid Grid.Row="1" ColumnDefinitions="220,Auto,*">
+    <Grid Grid.Row="1" ColumnDefinitions="240,Auto,*">
 
       <!-- Navigation sidebar -->
       <Border Grid.Column="0"
               Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
               BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
               BorderThickness="0,0,1,0">
-        <ListBox ItemsSource="{Binding NavItems}"
-                 SelectedItem="{Binding SelectedNavItem}"
-                 Margin="0,8">
-          <ListBox.ItemTemplate>
-            <DataTemplate DataType="{x:Type local:NavItem}">
-              <TextBlock Text="{Binding Label}" Padding="8,6" />
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
+        <DockPanel>
+          <!-- Filter box -->
+          <TextBox DockPanel.Dock="Top"
+                   Text="{Binding Tree.FilterText}"
+                   Watermark="Filter…"
+                   Margin="6,6,6,4" />
+
+          <!--
+            Context menu commands live on NavTreeViewModel (Tree).
+            ContextMenu is a popup outside the visual tree, so $parent[TreeView] doesn't work
+            inside it. The workaround: set Tag="{Binding $parent[TreeView].Tag}" on each
+            TextBlock (while still inside the visual tree), then inside the ContextMenu
+            use $parent[ContextMenu].PlacementTarget.Tag to reach NavTreeViewModel.
+          -->
+          <TreeView ItemsSource="{Binding Tree.RootNodes}"
+                    SelectedItem="{Binding Tree.SelectedNode}"
+                    Tag="{Binding Tree}"
+                    Margin="0,2">
+            <TreeView.DataTemplates>
+
+              <!-- Folder nodes (have children) -->
+              <TreeDataTemplate DataType="{x:Type local:FolderNode}"
+                                ItemsSource="{Binding Children}">
+                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" Padding="2,3"
+                           Tag="{Binding $parent[TreeView].Tag}">
+                  <TextBlock.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="Refresh"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.RefreshFolderCommand}"
+                                CommandParameter="{Binding}" />
+                      <MenuItem Header="Create…"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.CreateInFolderCommand}"
+                                CommandParameter="{Binding}" />
+                    </ContextMenu>
+                  </TextBlock.ContextMenu>
+                </TextBlock>
+              </TreeDataTemplate>
+
+              <!-- Queue node -->
+              <DataTemplate DataType="{x:Type local:QueueNode}">
+                <TextBlock Text="{Binding Label}" Padding="2,3"
+                           Tag="{Binding $parent[TreeView].Tag}">
+                  <TextBlock.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="Refresh"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.RefreshQueueCommand}"
+                                CommandParameter="{Binding Info.Name}" />
+                      <Separator />
+                      <MenuItem Header="Send Message…"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.SendToQueueCommand}"
+                                CommandParameter="{Binding Info.Name}" />
+                      <Separator />
+                      <MenuItem Header="Purge Messages"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.PurgeQueueCommand}"
+                                CommandParameter="{Binding Info.Name}" />
+                      <MenuItem Header="Purge Dead-letter"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.PurgeQueueDeadLetterCommand}"
+                                CommandParameter="{Binding Info.Name}" />
+                      <Separator />
+                      <MenuItem Header="Delete"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.DeleteQueueCommand}"
+                                CommandParameter="{Binding Info.Name}" />
+                    </ContextMenu>
+                  </TextBlock.ContextMenu>
+                </TextBlock>
+              </DataTemplate>
+
+              <!-- Topic node -->
+              <DataTemplate DataType="{x:Type local:TopicNode}">
+                <TextBlock Text="{Binding Label}" Padding="2,3"
+                           Tag="{Binding $parent[TreeView].Tag}">
+                  <TextBlock.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="Refresh"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.RefreshTopicCommand}"
+                                CommandParameter="{Binding Info.Name}" />
+                      <Separator />
+                      <MenuItem Header="Delete"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.DeleteTopicCommand}"
+                                CommandParameter="{Binding Info.Name}" />
+                    </ContextMenu>
+                  </TextBlock.ContextMenu>
+                </TextBlock>
+              </DataTemplate>
+
+              <!-- Event Hub node -->
+              <DataTemplate DataType="{x:Type local:EventHubNode}">
+                <TextBlock Text="{Binding Label}" Padding="2,3" />
+              </DataTemplate>
+
+              <!-- Relay node -->
+              <DataTemplate DataType="{x:Type local:RelayNode}">
+                <TextBlock Text="{Binding Label}" Padding="2,3"
+                           Tag="{Binding $parent[TreeView].Tag}">
+                  <TextBlock.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="Delete"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.DeleteRelayCommand}"
+                                CommandParameter="{Binding Info.Name}" />
+                    </ContextMenu>
+                  </TextBlock.ContextMenu>
+                </TextBlock>
+              </DataTemplate>
+
+              <!-- Notification Hub node -->
+              <DataTemplate DataType="{x:Type local:NotificationHubNode}">
+                <TextBlock Text="{Binding Label}" Padding="2,3"
+                           Tag="{Binding $parent[TreeView].Tag}">
+                  <TextBlock.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="Delete"
+                                Command="{Binding $parent[ContextMenu].PlacementTarget.Tag.DeleteNotifHubCommand}"
+                                CommandParameter="{Binding Info.Name}" />
+                    </ContextMenu>
+                  </TextBlock.ContextMenu>
+                </TextBlock>
+              </DataTemplate>
+
+            </TreeView.DataTemplates>
+          </TreeView>
+        </DockPanel>
       </Border>
 
       <!-- Splitter -->

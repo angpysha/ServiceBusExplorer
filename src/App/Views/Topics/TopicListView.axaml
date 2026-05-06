@@ -1,0 +1,76 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             xmlns:domain="using:ServiceBusExplorer"
+             x:DataType="vm:TopicListViewModel"
+             x:Class="ServiceBusExplorer.App.Views.Topics.TopicListView">
+  <Grid RowDefinitions="Auto,Auto,Auto,*">
+
+    <!-- Header -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12,16,8" Spacing="8">
+      <TextBlock Text="Topics" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Content="Refresh" Command="{Binding RefreshCommand}" VerticalAlignment="Center" />
+      <Button Content="+ New" Command="{Binding BeginCreateCommand}" VerticalAlignment="Center" />
+      <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
+                 VerticalAlignment="Center"
+                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+    </StackPanel>
+
+    <!-- Error -->
+    <TextBlock Grid.Row="1"
+               Text="{Binding Error}"
+               IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+               Margin="16,0,16,8" TextWrapping="Wrap" />
+
+    <!-- Quick-create form -->
+    <Border Grid.Row="2"
+            IsVisible="{Binding IsCreating}"
+            Margin="16,0,16,8"
+            Padding="12"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            CornerRadius="4">
+      <StackPanel Spacing="8">
+        <TextBlock Text="New Topic" FontWeight="SemiBold" />
+        <TextBox Text="{Binding NewTopicName}" Watermark="Topic name" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Create" Command="{Binding QuickCreateCommand}" />
+          <Button Content="Cancel" Command="{Binding CancelCreateCommand}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- Column headers + list -->
+    <Grid Grid.Row="3" RowDefinitions="Auto,*">
+      <Grid Grid.Row="0"
+            ColumnDefinitions="*,100,80"
+            Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
+            Margin="16,0">
+        <TextBlock Grid.Column="0" Text="Name" FontWeight="SemiBold" Padding="8,6" />
+        <TextBlock Grid.Column="1" Text="Subscriptions" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
+        <TextBlock Grid.Column="2" Text="Status" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Center" />
+      </Grid>
+
+      <ListBox Grid.Row="1"
+               ItemsSource="{Binding Topics}"
+               SelectedItem="{Binding SelectedTopic}"
+               Margin="16,0"
+               Background="Transparent"
+               BorderThickness="0">
+        <ListBox.ItemTemplate>
+          <DataTemplate DataType="{x:Type domain:TopicInfo}">
+            <Grid ColumnDefinitions="*,100,80">
+              <TextBlock Grid.Column="0" Text="{Binding Name}" Padding="8,4" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding SubscriptionCount}" Padding="8,4"
+                         VerticalAlignment="Center" HorizontalAlignment="Right" />
+              <TextBlock Grid.Column="2" Text="{Binding Status}" Padding="8,4"
+                         VerticalAlignment="Center" HorizontalAlignment="Center"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+  </Grid>
+</UserControl>

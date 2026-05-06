@@ -8,7 +8,16 @@ public record SubscriptionInfo(
     long DeadLetterCount,
     TimeSpan LockDuration,
     int MaxDeliveryCount,
-    EntityStatus Status);
+    EntityStatus Status,
+    // Extended fields for editing
+    TimeSpan DefaultMessageTimeToLive = default,
+    TimeSpan AutoDeleteOnIdle = default,
+    bool EnableBatchedOperations = true,
+    string? ForwardTo = null,
+    string? ForwardDeadLetteredMessagesTo = null,
+    string? UserMetadata = null,
+    bool EnableDeadLetteringOnMessageExpiration = false,
+    bool EnableDeadLetteringOnFilterEvaluationExceptions = true);
 
 public record CreateSubscriptionOptions(
     string TopicName,

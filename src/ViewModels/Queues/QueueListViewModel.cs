@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Reactive;
-using System.Reactive.Linq;
 using DynamicData;
 using ReactiveUI;
 
@@ -12,6 +11,10 @@ public class QueueListViewModel : ReactiveObject
     private readonly SourceList<QueueInfo> _source = new();
     private bool _isLoading;
     private string? _error;
+    private QueueInfo? _selectedQueue;
+    private QueueDetailViewModel? _selectedDetail;
+    private bool _isCreating;
+    private string _newQueueName = "";
 
     public ReadOnlyObservableCollection<QueueInfo> Queues { get; }
 
@@ -27,9 +30,36 @@ public class QueueListViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _error, value);
     }
 
+    public QueueInfo? SelectedQueue
+    {
+        get => _selectedQueue;
+        set => this.RaiseAndSetIfChanged(ref _selectedQueue, value);
+    }
+
+    public QueueDetailViewModel? SelectedDetail
+    {
+        get => _selectedDetail;
+        private set => this.RaiseAndSetIfChanged(ref _selectedDetail, value);
+    }
+
+    public bool IsCreating
+    {
+        get => _isCreating;
+        set => this.RaiseAndSetIfChanged(ref _isCreating, value);
+    }
+
+    public string NewQueueName
+    {
+        get => _newQueueName;
+        set => this.RaiseAndSetIfChanged(ref _newQueueName, value);
+    }
+
     public ReactiveCommand<Unit, IReadOnlyList<QueueInfo>> RefreshCommand { get; }
     public ReactiveCommand<CreateQueueOptions, QueueInfo> CreateCommand { get; }
     public ReactiveCommand<string, Unit> DeleteCommand { get; }
+    public ReactiveCommand<Unit, Unit> BeginCreateCommand { get; }
+    public ReactiveCommand<Unit, Unit> CancelCreateCommand { get; }
+    public ReactiveCommand<Unit, Unit> QuickCreateCommand { get; }
 
     public QueueListViewModel(IQueueService svc)
     {
@@ -39,6 +69,15 @@ public class QueueListViewModel : ReactiveObject
             .Bind(out var bound)
             .Subscribe();
         Queues = bound;
+
+        this.WhenAnyValue(x => x.SelectedQueue)
+            .Subscribe(q =>
+            {
+                var detail = q == null ? null : new QueueDetailViewModel(_svc, q.Name);
+                if (detail != null)
+                    detail.NavigateBackRequested.Subscribe(_ => SelectedQueue = null);
+                SelectedDetail = detail;
+            });
 
         RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -82,5 +121,22 @@ public class QueueListViewModel : ReactiveObject
             });
             return Unit.Default;
         });
+
+        BeginCreateCommand = ReactiveCommand.Create(() => { IsCreating = true; });
+        CancelCreateCommand = ReactiveCommand.Create(() =>
+        {
+            IsCreating = false;
+            NewQueueName = "";
+        });
+
+        var canQuickCreate = this.WhenAnyValue(x => x.NewQueueName,
+            n => !string.IsNullOrWhiteSpace(n));
+        QuickCreateCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            var created = await _svc.CreateAsync(new CreateQueueOptions(NewQueueName));
+            _source.Add(created);
+            IsCreating = false;
+            NewQueueName = "";
+        }, canQuickCreate);
     }
 }

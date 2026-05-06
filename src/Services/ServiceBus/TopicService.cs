@@ -18,9 +18,15 @@ public class TopicService : ITopicService
 
     public async Task<IReadOnlyList<TopicInfo>> ListAsync(CancellationToken ct = default)
     {
+        var runtimeMap = new Dictionary<string, TopicRuntimeProperties>();
+        await foreach (var r in _admin.GetTopicsRuntimePropertiesAsync(ct))
+            runtimeMap[r.Name] = r;
         var results = new List<TopicInfo>();
-        await foreach (var props in _admin.GetTopicsRuntimePropertiesAsync(ct))
-            results.Add(MapRuntime(props));
+        await foreach (var p in _admin.GetTopicsAsync(ct))
+        {
+            if (runtimeMap.TryGetValue(p.Name, out var runtime))
+                results.Add(MapFull(p, runtime));
+        }
         return results;
     }
 
@@ -51,6 +57,11 @@ public class TopicService : ITopicService
         var existing = await _admin.GetTopicAsync(updated.Name, ct);
         var props = existing.Value;
         props.EnableBatchedOperations = updated.EnableBatchedOperations;
+        props.DefaultMessageTimeToLive = updated.DefaultMessageTimeToLive == default ? props.DefaultMessageTimeToLive : updated.DefaultMessageTimeToLive;
+        props.AutoDeleteOnIdle = updated.AutoDeleteOnIdle == default ? props.AutoDeleteOnIdle : updated.AutoDeleteOnIdle;
+        props.MaxSizeInMegabytes = (int)updated.MaxSizeInMegabytes;
+        props.DuplicateDetectionHistoryTimeWindow = updated.DuplicateDetectionHistoryTimeWindow == default ? props.DuplicateDetectionHistoryTimeWindow : updated.DuplicateDetectionHistoryTimeWindow;
+        if (updated.UserMetadata != null) props.UserMetadata = updated.UserMetadata;
         props.Status = MapStatus(updated.Status);
 
         var result = await _admin.UpdateTopicAsync(props, ct);
@@ -61,12 +72,19 @@ public class TopicService : ITopicService
     public async Task DeleteAsync(string name, CancellationToken ct = default) =>
         await _admin.DeleteTopicAsync(name, ct);
 
-    private static TopicInfo MapRuntime(TopicRuntimeProperties p) => new(
-        p.Name, p.SubscriptionCount, p.SizeInBytes, true, false, CoreEntityStatus.Unknown);
-
     private static TopicInfo MapFull(TopicProperties p, TopicRuntimeProperties r) => new(
-        p.Name, r.SubscriptionCount, r.SizeInBytes,
-        p.EnableBatchedOperations, p.EnablePartitioning, MapEntityStatus(p.Status));
+        Name: p.Name,
+        SubscriptionCount: r.SubscriptionCount,
+        SizeInBytes: r.SizeInBytes,
+        EnableBatchedOperations: p.EnableBatchedOperations,
+        EnablePartitioning: p.EnablePartitioning,
+        Status: MapEntityStatus(p.Status),
+        DefaultMessageTimeToLive: p.DefaultMessageTimeToLive,
+        AutoDeleteOnIdle: p.AutoDeleteOnIdle,
+        MaxSizeInMegabytes: p.MaxSizeInMegabytes,
+        UserMetadata: string.IsNullOrEmpty(p.UserMetadata) ? null : p.UserMetadata,
+        DuplicateDetectionHistoryTimeWindow: p.DuplicateDetectionHistoryTimeWindow,
+        RequiresDuplicateDetection: p.RequiresDuplicateDetection);
 
     private static CoreEntityStatus MapEntityStatus(SBEntityStatus s)
     {

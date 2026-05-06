@@ -22,10 +22,19 @@ public class QueueService : IQueueService
 
     public async Task<IReadOnlyList<QueueInfo>> ListAsync(CancellationToken ct = default)
     {
-        var results = new List<QueueInfo>();
-        await foreach (var props in _admin.GetQueuesRuntimePropertiesAsync(ct))
-            results.Add(MapRuntime(props));
-        return results;
+        var propsList = new List<(QueueProperties props, QueueRuntimeProperties runtime)>();
+        var runtimeMap = new Dictionary<string, QueueRuntimeProperties>();
+        await foreach (var r in _admin.GetQueuesRuntimePropertiesAsync(ct))
+            runtimeMap[r.Name] = r;
+        await foreach (var p in _admin.GetQueuesAsync(ct))
+        {
+            runtimeMap.TryGetValue(p.Name, out var runtime);
+            propsList.Add((p, runtime!));
+        }
+        return propsList
+            .Where(t => t.runtime != null)
+            .Select(t => MapFull(t.props, t.runtime))
+            .ToList();
     }
 
     public async Task<QueueInfo> GetAsync(string name, CancellationToken ct = default)
@@ -55,6 +64,14 @@ public class QueueService : IQueueService
         var props = existing.Value;
         props.LockDuration = updated.LockDuration;
         props.DefaultMessageTimeToLive = updated.DefaultMessageTimeToLive;
+        props.AutoDeleteOnIdle = updated.AutoDeleteOnIdle == default ? props.AutoDeleteOnIdle : updated.AutoDeleteOnIdle;
+        props.MaxDeliveryCount = updated.MaxDeliveryCount;
+        props.MaxSizeInMegabytes = (int)updated.MaxSizeInMegabytes;
+        props.EnableBatchedOperations = updated.EnableBatchedOperations;
+        props.DeadLetteringOnMessageExpiration = updated.EnableDeadLetteringOnMessageExpiration;
+        if (updated.ForwardTo != null) props.ForwardTo = updated.ForwardTo;
+        if (updated.ForwardDeadLetteredMessagesTo != null) props.ForwardDeadLetteredMessagesTo = updated.ForwardDeadLetteredMessagesTo;
+        if (updated.UserMetadata != null) props.UserMetadata = updated.UserMetadata;
         props.Status = MapStatus(updated.Status);
 
         var result = await _admin.UpdateQueueAsync(props, ct);
@@ -119,15 +136,27 @@ public class QueueService : IQueueService
         }
     }
 
-    private static QueueInfo MapRuntime(QueueRuntimeProperties p) => new(
-        p.Name, p.ActiveMessageCount, p.DeadLetterMessageCount, p.ScheduledMessageCount,
-        TimeSpan.Zero, false, false, TimeSpan.MaxValue, CoreEntityStatus.Unknown);
-
     private static QueueInfo MapFull(Azure.Messaging.ServiceBus.Administration.QueueProperties p,
         QueueRuntimeProperties r) => new(
-        p.Name, r.ActiveMessageCount, r.DeadLetterMessageCount, r.ScheduledMessageCount,
-        p.LockDuration, p.RequiresDuplicateDetection, p.RequiresSession,
-        p.DefaultMessageTimeToLive, MapEntityStatus(p.Status));
+        Name: p.Name,
+        ActiveMessageCount: r.ActiveMessageCount,
+        DeadLetterCount: r.DeadLetterMessageCount,
+        ScheduledMessageCount: r.ScheduledMessageCount,
+        LockDuration: p.LockDuration,
+        RequiresDuplicateDetection: p.RequiresDuplicateDetection,
+        RequiresSession: p.RequiresSession,
+        DefaultMessageTimeToLive: p.DefaultMessageTimeToLive,
+        Status: MapEntityStatus(p.Status),
+        AutoDeleteOnIdle: p.AutoDeleteOnIdle,
+        MaxDeliveryCount: p.MaxDeliveryCount,
+        MaxSizeInMegabytes: p.MaxSizeInMegabytes,
+        EnableBatchedOperations: p.EnableBatchedOperations,
+        ForwardTo: string.IsNullOrEmpty(p.ForwardTo) ? null : p.ForwardTo,
+        ForwardDeadLetteredMessagesTo: string.IsNullOrEmpty(p.ForwardDeadLetteredMessagesTo) ? null : p.ForwardDeadLetteredMessagesTo,
+        UserMetadata: string.IsNullOrEmpty(p.UserMetadata) ? null : p.UserMetadata,
+        DuplicateDetectionHistoryTimeWindow: p.DuplicateDetectionHistoryTimeWindow,
+        SizeInBytes: r.SizeInBytes,
+        EnableDeadLetteringOnMessageExpiration: p.DeadLetteringOnMessageExpiration);
 
     private static ReceivedMessage MapMessage(ServiceBusReceivedMessage m) => new(
         m.MessageId, m.Body.ToString(), m.ContentType ?? "application/octet-stream",

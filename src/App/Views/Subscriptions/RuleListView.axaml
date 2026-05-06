@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             xmlns:domain="using:ServiceBusExplorer"
+             x:DataType="vm:RuleListViewModel"
+             x:Class="ServiceBusExplorer.App.Views.Subscriptions.RuleListView">
+  <Grid RowDefinitions="Auto,Auto,Auto,*">
+
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+      <TextBlock Text="Filters / Rules" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Content="Refresh" Command="{Binding RefreshCommand}" />
+      <Button Content="+ Add" Command="{Binding BeginCreateCommand}" />
+      <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
+                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                 VerticalAlignment="Center" />
+    </StackPanel>
+
+    <TextBlock Grid.Row="1"
+               Text="{Binding Error}"
+               IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+               Margin="0,0,0,8" TextWrapping="Wrap" />
+
+    <!-- Create form -->
+    <Border Grid.Row="2"
+            IsVisible="{Binding IsCreating}"
+            Margin="0,0,0,8"
+            Padding="10"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            CornerRadius="4">
+      <StackPanel Spacing="6">
+        <TextBlock Text="Rule Name" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        <TextBox Text="{Binding NewRuleName}" Watermark="e.g. my-filter" />
+        <TextBlock Text="Filter Type" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        <ComboBox ItemsSource="{Binding FilterTypes}" SelectedItem="{Binding NewRuleFilterType}" />
+        <TextBlock Text="Expression" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        <TextBox Text="{Binding NewRuleExpression}" Watermark="1=1" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Add" Command="{Binding CreateCommand}" />
+          <Button Content="Cancel" Command="{Binding CancelCreateCommand}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- Rules list -->
+    <ListBox Grid.Row="3"
+             ItemsSource="{Binding Rules}"
+             SelectedItem="{Binding SelectedRule}"
+             Background="Transparent"
+             BorderThickness="0">
+      <ListBox.ItemTemplate>
+        <DataTemplate DataType="{x:Type domain:RuleInfo}">
+          <Grid ColumnDefinitions="*,*,Auto">
+            <TextBlock Grid.Column="0" Text="{Binding Name}" Padding="4,2" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding Filter}" Padding="4,2" VerticalAlignment="Center"
+                       FontFamily="Cascadia Code,Consolas,monospace"
+                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                       TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="2" Content="Delete"
+                    Command="{Binding $parent[ListBox].((vm:RuleListViewModel)DataContext).DeleteCommand}"
+                    CommandParameter="{Binding Name}"
+                    Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                    Padding="8,2" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+</UserControl>

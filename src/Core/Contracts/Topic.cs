@@ -7,7 +7,14 @@ public record TopicInfo(
     long SizeInBytes,
     bool EnableBatchedOperations,
     bool EnablePartitioning,
-    EntityStatus Status);
+    EntityStatus Status,
+    // Extended fields for editing
+    TimeSpan DefaultMessageTimeToLive = default,
+    TimeSpan AutoDeleteOnIdle = default,
+    long MaxSizeInMegabytes = 1024,
+    string? UserMetadata = null,
+    TimeSpan DuplicateDetectionHistoryTimeWindow = default,
+    bool RequiresDuplicateDetection = false);
 
 public record CreateTopicOptions(
     string Name,

@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             x:DataType="vm:NotificationHubDetailViewModel"
+             x:Class="ServiceBusExplorer.App.Views.NotificationHubs.NotificationHubDetailView">
+  <Grid RowDefinitions="Auto,Auto,*">
+
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12,16,8" Spacing="8">
+      <TextBlock Text="{Binding Info.Name, FallbackValue='Select a Notification Hub'}"
+                 FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Content="Refresh" Command="{Binding RefreshCommand}" VerticalAlignment="Center" />
+      <Button Content="Delete" Command="{Binding DeleteCommand}" VerticalAlignment="Center"
+              Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}" />
+      <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
+                 VerticalAlignment="Center"
+                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+    </StackPanel>
+
+    <TextBlock Grid.Row="1"
+               Text="{Binding Error}"
+               IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+               Margin="16,0,16,8" TextWrapping="Wrap" />
+
+    <ScrollViewer Grid.Row="2">
+      <StackPanel Margin="16,0,16,16" Spacing="12">
+        <WrapPanel Orientation="Horizontal">
+          <Border Margin="0,0,12,8" Padding="10,6"
+                  Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
+                  CornerRadius="4">
+            <StackPanel>
+              <TextBlock Text="Registrations" FontSize="11"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+              <TextBlock Text="{Binding Info.RegistrationCount, FallbackValue='–'}" FontSize="18" FontWeight="SemiBold" />
+            </StackPanel>
+          </Border>
+          <Border Margin="0,0,12,8" Padding="10,6"
+                  Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
+                  CornerRadius="4">
+            <StackPanel>
+              <TextBlock Text="APNS" FontSize="11"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+              <TextBlock Text="{Binding Info.ApnsCredential, FallbackValue='Not configured'}" FontSize="12" />
+            </StackPanel>
+          </Border>
+          <Border Margin="0,0,0,8" Padding="10,6"
+                  Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
+                  CornerRadius="4">
+            <StackPanel>
+              <TextBlock Text="GCM / FCM" FontSize="11"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+              <TextBlock Text="{Binding Info.GcmCredential, FallbackValue='Not configured'}" FontSize="12" />
+            </StackPanel>
+          </Border>
+        </WrapPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

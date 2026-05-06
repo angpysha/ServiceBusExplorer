@@ -12,7 +12,18 @@ public record QueueInfo(
     bool RequiresDuplicateDetection,
     bool RequiresSession,
     TimeSpan DefaultMessageTimeToLive,
-    EntityStatus Status);
+    EntityStatus Status,
+    // Extended fields for editing
+    TimeSpan AutoDeleteOnIdle = default,
+    int MaxDeliveryCount = 10,
+    long MaxSizeInMegabytes = 1024,
+    bool EnableBatchedOperations = true,
+    string? ForwardTo = null,
+    string? ForwardDeadLetteredMessagesTo = null,
+    string? UserMetadata = null,
+    TimeSpan DuplicateDetectionHistoryTimeWindow = default,
+    long SizeInBytes = 0,
+    bool EnableDeadLetteringOnMessageExpiration = false);
 
 public record CreateQueueOptions(
     string Name,

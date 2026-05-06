@@ -6,13 +6,16 @@ using ReactiveUI;
 
 namespace ServiceBusExplorer.ViewModels;
 
-public class QueueDetailViewModel : ReactiveObject
+public class SubscriptionDetailViewModel : ReactiveObject
 {
-    private readonly IQueueService _svc;
-    private readonly string _queueName;
+    private readonly ISubscriptionService _subSvc;
+    private readonly IQueueService _queueSvc;
+    private readonly string _entityPath;
+    private readonly string _topicName;
+    private readonly string _subscriptionName;
     private readonly Subject<Unit> _navigateBack = new();
     private readonly SourceList<ReceivedMessage> _messageSource = new();
-    private QueueInfo? _queue;
+    private SubscriptionInfo? _info;
     private bool _isLoading;
     private string? _error;
     private ReceivedMessage? _selectedMessage;
@@ -21,8 +24,8 @@ public class QueueDetailViewModel : ReactiveObject
     private bool _showSendPanel;
 
     // Editable fields
-    private int _maxDeliveryCount;
     private TimeSpan _lockDuration;
+    private int _maxDeliveryCount;
     private TimeSpan _defaultMessageTimeToLive;
     private TimeSpan _autoDeleteOnIdle;
     private bool _enableBatchedOperations;
@@ -33,12 +36,12 @@ public class QueueDetailViewModel : ReactiveObject
     private bool _isSaving;
     private string? _saveError;
 
-    public QueueInfo? Queue
+    public SubscriptionInfo? Info
     {
-        get => _queue;
+        get => _info;
         private set
         {
-            this.RaiseAndSetIfChanged(ref _queue, value);
+            this.RaiseAndSetIfChanged(ref _info, value);
             if (value != null) PopulateEditableFields(value);
         }
     }
@@ -79,15 +82,15 @@ public class QueueDetailViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _showSendPanel, value);
     }
 
-    public int MaxDeliveryCount
-    {
-        get => _maxDeliveryCount;
-        set => this.RaiseAndSetIfChanged(ref _maxDeliveryCount, value);
-    }
     public TimeSpan LockDuration
     {
         get => _lockDuration;
         set => this.RaiseAndSetIfChanged(ref _lockDuration, value);
+    }
+    public int MaxDeliveryCount
+    {
+        get => _maxDeliveryCount;
+        set => this.RaiseAndSetIfChanged(ref _maxDeliveryCount, value);
     }
     public TimeSpan DefaultMessageTimeToLive
     {
@@ -139,6 +142,7 @@ public class QueueDetailViewModel : ReactiveObject
         new[] { MessageSubQueue.None, MessageSubQueue.DeadLetter, MessageSubQueue.TransferDeadLetter };
 
     public ReadOnlyObservableCollection<ReceivedMessage> Messages { get; }
+    public RuleListViewModel Rules { get; }
     public SendMessageViewModel Send { get; }
 
     public IObservable<Unit> NavigateBackRequested => _navigateBack;
@@ -149,15 +153,23 @@ public class QueueDetailViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> ToggleSendPanelCommand { get; }
     public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
 
-    public QueueDetailViewModel(IQueueService svc, string queueName)
+    public SubscriptionDetailViewModel(
+        ISubscriptionService subSvc,
+        IQueueService queueSvc,
+        string topicName,
+        string subscriptionName)
     {
-        _svc = svc;
-        _queueName = queueName;
+        _subSvc = subSvc;
+        _queueSvc = queueSvc;
+        _topicName = topicName;
+        _subscriptionName = subscriptionName;
+        _entityPath = $"{topicName}/Subscriptions/{subscriptionName}";
 
         _messageSource.Connect().Bind(out var bound).Subscribe();
         Messages = bound;
 
-        Send = new SendMessageViewModel(svc, queueName);
+        Rules = new RuleListViewModel(subSvc, topicName, subscriptionName);
+        Send = new SendMessageViewModel(queueSvc, topicName);
 
         NavigateBackCommand = ReactiveCommand.Create(() => _navigateBack.OnNext(Unit.Default));
         ToggleSendPanelCommand = ReactiveCommand.Create(() => { ShowSendPanel = !ShowSendPanel; });
@@ -168,7 +180,7 @@ public class QueueDetailViewModel : ReactiveObject
             Error = null;
             try
             {
-                Queue = await _svc.GetAsync(_queueName);
+                Info = await subSvc.GetAsync(topicName, subscriptionName);
             }
             catch (Exception ex)
             {
@@ -186,7 +198,7 @@ public class QueueDetailViewModel : ReactiveObject
             Error = null;
             try
             {
-                var msgs = await _svc.PeekAsync(_queueName, PeekCount, SelectedSubQueue);
+                var msgs = await queueSvc.PeekAsync(_entityPath, PeekCount, SelectedSubQueue);
                 _messageSource.Edit(list => { list.Clear(); list.AddRange(msgs); });
             }
             catch (Exception ex)
@@ -205,7 +217,7 @@ public class QueueDetailViewModel : ReactiveObject
             Error = null;
             try
             {
-                await _svc.PurgeAsync(_queueName, SelectedSubQueue);
+                await queueSvc.PurgeAsync(_entityPath, SelectedSubQueue);
                 _messageSource.Clear();
             }
             catch (Exception ex)
@@ -220,15 +232,15 @@ public class QueueDetailViewModel : ReactiveObject
 
         UpdateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            if (Queue == null) return;
+            if (Info == null) return;
             IsSaving = true;
             SaveError = null;
             try
             {
-                var updated = Queue with
+                var updated = Info with
                 {
-                    MaxDeliveryCount = MaxDeliveryCount,
                     LockDuration = LockDuration,
+                    MaxDeliveryCount = MaxDeliveryCount,
                     DefaultMessageTimeToLive = DefaultMessageTimeToLive,
                     AutoDeleteOnIdle = AutoDeleteOnIdle,
                     EnableBatchedOperations = EnableBatchedOperations,
@@ -237,7 +249,7 @@ public class QueueDetailViewModel : ReactiveObject
                     ForwardDeadLetteredMessagesTo = ForwardDeadLetteredMessagesTo,
                     UserMetadata = UserMetadata,
                 };
-                Queue = await _svc.UpdateAsync(updated);
+                Info = await _subSvc.UpdateAsync(updated);
             }
             catch (Exception ex)
             {
@@ -250,18 +262,19 @@ public class QueueDetailViewModel : ReactiveObject
         });
 
         RefreshInfoCommand.Execute().Subscribe();
+        Rules.RefreshCommand.Execute().Subscribe();
     }
 
-    private void PopulateEditableFields(QueueInfo q)
+    private void PopulateEditableFields(SubscriptionInfo s)
     {
-        MaxDeliveryCount = q.MaxDeliveryCount;
-        LockDuration = q.LockDuration;
-        DefaultMessageTimeToLive = q.DefaultMessageTimeToLive;
-        AutoDeleteOnIdle = q.AutoDeleteOnIdle;
-        EnableBatchedOperations = q.EnableBatchedOperations;
-        EnableDeadLetteringOnMessageExpiration = q.EnableDeadLetteringOnMessageExpiration;
-        ForwardTo = q.ForwardTo;
-        ForwardDeadLetteredMessagesTo = q.ForwardDeadLetteredMessagesTo;
-        UserMetadata = q.UserMetadata;
+        LockDuration = s.LockDuration;
+        MaxDeliveryCount = s.MaxDeliveryCount;
+        DefaultMessageTimeToLive = s.DefaultMessageTimeToLive;
+        AutoDeleteOnIdle = s.AutoDeleteOnIdle;
+        EnableBatchedOperations = s.EnableBatchedOperations;
+        EnableDeadLetteringOnMessageExpiration = s.EnableDeadLetteringOnMessageExpiration;
+        ForwardTo = s.ForwardTo;
+        ForwardDeadLetteredMessagesTo = s.ForwardDeadLetteredMessagesTo;
+        UserMetadata = s.UserMetadata;
     }
 }

@@ -12,8 +12,17 @@ public class SubscriptionListViewModel : ReactiveObject
     private readonly SourceList<SubscriptionInfo> _source = new();
     private bool _isLoading;
     private string? _error;
+    private SubscriptionInfo? _selectedSubscription;
+    private bool _isCreating;
+    private string _newSubscriptionName = "";
 
     public ReadOnlyObservableCollection<SubscriptionInfo> Subscriptions { get; }
+
+    public SubscriptionInfo? SelectedSubscription
+    {
+        get => _selectedSubscription;
+        set => this.RaiseAndSetIfChanged(ref _selectedSubscription, value);
+    }
 
     public bool IsLoading
     {
@@ -27,9 +36,24 @@ public class SubscriptionListViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _error, value);
     }
 
+    public bool IsCreating
+    {
+        get => _isCreating;
+        set => this.RaiseAndSetIfChanged(ref _isCreating, value);
+    }
+
+    public string NewSubscriptionName
+    {
+        get => _newSubscriptionName;
+        set => this.RaiseAndSetIfChanged(ref _newSubscriptionName, value);
+    }
+
     public ReactiveCommand<Unit, IReadOnlyList<SubscriptionInfo>> RefreshCommand { get; }
     public ReactiveCommand<CreateSubscriptionOptions, SubscriptionInfo> CreateCommand { get; }
     public ReactiveCommand<string, Unit> DeleteCommand { get; }
+    public ReactiveCommand<Unit, Unit> BeginCreateCommand { get; }
+    public ReactiveCommand<Unit, Unit> CancelCreateCommand { get; }
+    public ReactiveCommand<Unit, Unit> QuickCreateCommand { get; }
 
     public SubscriptionListViewModel(ISubscriptionService svc, string topicName)
     {
@@ -83,5 +107,22 @@ public class SubscriptionListViewModel : ReactiveObject
             });
             return Unit.Default;
         });
+
+        BeginCreateCommand = ReactiveCommand.Create(() => { IsCreating = true; });
+        CancelCreateCommand = ReactiveCommand.Create(() =>
+        {
+            IsCreating = false;
+            NewSubscriptionName = "";
+        });
+
+        var canQuickCreate = this.WhenAnyValue(x => x.NewSubscriptionName,
+            n => !string.IsNullOrWhiteSpace(n));
+        QuickCreateCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            var created = await _svc.CreateAsync(new CreateSubscriptionOptions(_topicName, NewSubscriptionName));
+            _source.Add(created);
+            IsCreating = false;
+            NewSubscriptionName = "";
+        }, canQuickCreate);
     }
 }

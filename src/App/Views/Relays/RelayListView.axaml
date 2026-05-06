@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             xmlns:domain="using:ServiceBusExplorer"
+             x:DataType="vm:RelayListViewModel"
+             x:Class="ServiceBusExplorer.App.Views.Relays.RelayListView">
+  <Grid RowDefinitions="Auto,Auto,*">
+
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12,16,8" Spacing="8">
+      <TextBlock Text="Relays" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Content="Refresh" Command="{Binding RefreshCommand}" VerticalAlignment="Center" />
+      <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
+                 VerticalAlignment="Center"
+                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+    </StackPanel>
+
+    <TextBlock Grid.Row="1"
+               Text="{Binding Error}"
+               IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+               Margin="16,0,16,8" TextWrapping="Wrap" />
+
+    <Grid Grid.Row="2" RowDefinitions="Auto,*">
+      <Grid Grid.Row="0"
+            ColumnDefinitions="*,120,80,80"
+            Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
+            Margin="16,0">
+        <TextBlock Grid.Column="0" Text="Name" FontWeight="SemiBold" Padding="8,6" />
+        <TextBlock Grid.Column="1" Text="Type" FontWeight="SemiBold" Padding="8,6" />
+        <TextBlock Grid.Column="2" Text="Dynamic" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Center" />
+        <TextBlock Grid.Column="3" Text="Listeners" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
+      </Grid>
+
+      <ListBox Grid.Row="1"
+               ItemsSource="{Binding Relays}"
+               Margin="16,0"
+               Background="Transparent"
+               BorderThickness="0">
+        <ListBox.ItemTemplate>
+          <DataTemplate DataType="{x:Type domain:RelayInfo}">
+            <Grid ColumnDefinitions="*,120,80,80">
+              <TextBlock Grid.Column="0" Text="{Binding Name}" Padding="8,4" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding Type}" Padding="8,4" VerticalAlignment="Center"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+              <TextBlock Grid.Column="2" Text="{Binding IsDynamic}" Padding="8,4"
+                         VerticalAlignment="Center" HorizontalAlignment="Center"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+              <TextBlock Grid.Column="3" Text="{Binding ListenerCount}" Padding="8,4"
+                         VerticalAlignment="Center" HorizontalAlignment="Right" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+  </Grid>
+</UserControl>

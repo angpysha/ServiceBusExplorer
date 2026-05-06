@@ -13,6 +13,7 @@ public class EventHubListViewModel : ReactiveObject
     private string? _error;
 
     public ReadOnlyObservableCollection<EventHubInfo> EventHubs { get; }
+    public EventHubDetailViewModel Detail { get; }
 
     public bool IsLoading
     {
@@ -28,9 +29,10 @@ public class EventHubListViewModel : ReactiveObject
 
     public ReactiveCommand<Unit, EventHubInfo?> RefreshCommand { get; }
 
-    public EventHubListViewModel(IEventHubService svc)
+    public EventHubListViewModel(IEventHubService svc, EventHubDetailViewModel detail)
     {
         _svc = svc;
+        Detail = detail;
 
         _source.Connect()
             .Bind(out var bound)
@@ -49,6 +51,7 @@ public class EventHubListViewModel : ReactiveObject
                     list.Clear();
                     list.Add(hub);
                 });
+                Detail.RefreshCommand.Execute().Subscribe();
                 return (EventHubInfo?)hub;
             }
             catch (Exception ex)

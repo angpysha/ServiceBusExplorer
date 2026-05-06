@@ -1,0 +1,76 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             xmlns:domain="using:ServiceBusExplorer"
+             x:DataType="vm:EventHubDetailViewModel"
+             x:Class="ServiceBusExplorer.App.Views.EventHubs.EventHubDetailView">
+  <Grid RowDefinitions="Auto,Auto,*">
+
+    <!-- Header -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12,16,8" Spacing="8">
+      <TextBlock Text="{Binding Hub.Name, FallbackValue='Select an Event Hub'}"
+                 FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Content="Refresh" Command="{Binding RefreshCommand}" VerticalAlignment="Center" />
+      <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
+                 VerticalAlignment="Center"
+                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+    </StackPanel>
+
+    <!-- Error -->
+    <TextBlock Grid.Row="1"
+               Text="{Binding Error}"
+               IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+               Margin="16,0,16,8" TextWrapping="Wrap" />
+
+    <ScrollViewer Grid.Row="2">
+      <StackPanel Margin="16,0,16,16" Spacing="16">
+
+        <!-- Partitions -->
+        <StackPanel Spacing="6">
+          <TextBlock Text="Partitions" FontWeight="SemiBold" />
+          <Grid ColumnDefinitions="80,120,120,80"
+                Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+            <TextBlock Grid.Column="0" Text="ID" FontWeight="SemiBold" Padding="8,6" />
+            <TextBlock Grid.Column="1" Text="Begin Seq #" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="2" Text="Last Seq #" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
+            <TextBlock Grid.Column="3" Text="Empty" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Center" />
+          </Grid>
+          <ListBox ItemsSource="{Binding Partitions}"
+                   Background="Transparent" BorderThickness="0"
+                   MaxHeight="200">
+            <ListBox.ItemTemplate>
+              <DataTemplate DataType="{x:Type domain:PartitionInfo}">
+                <Grid ColumnDefinitions="80,120,120,80">
+                  <TextBlock Grid.Column="0" Text="{Binding PartitionId}" Padding="8,4" />
+                  <TextBlock Grid.Column="1" Text="{Binding BeginningSequenceNumber}" Padding="8,4" HorizontalAlignment="Right" />
+                  <TextBlock Grid.Column="2" Text="{Binding LastEnqueuedSequenceNumber}" Padding="8,4" HorizontalAlignment="Right" />
+                  <TextBlock Grid.Column="3" Text="{Binding IsEmpty}" Padding="8,4" HorizontalAlignment="Center"
+                             Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+
+        <!-- Consumer Groups -->
+        <StackPanel Spacing="6">
+          <TextBlock Text="Consumer Groups" FontWeight="SemiBold" />
+          <ListBox ItemsSource="{Binding ConsumerGroups}"
+                   Background="Transparent" BorderThickness="0"
+                   MaxHeight="200">
+            <ListBox.ItemTemplate>
+              <DataTemplate DataType="{x:Type domain:ConsumerGroupInfo}">
+                <StackPanel Orientation="Horizontal" Spacing="12" Margin="8,4">
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:yyyy-MM-dd}'}" FontSize="12"
+                             Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>
