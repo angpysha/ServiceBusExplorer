@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Reactive;
 using ReactiveUI;
 
@@ -85,6 +86,9 @@ public class ConnectViewModel : ReactiveObject
 
     public static IReadOnlyList<ServiceBusAuthMode> AuthModes { get; } =
         Enum.GetValues<ServiceBusAuthMode>();
+
+    /// Populated externally (by MainWindowViewModel) from persisted history.
+    public ObservableCollection<string> ConnectionHistory { get; } = new();
 
     public ReactiveCommand<Unit, ConnectionOptions> ConnectCommand { get; }
 

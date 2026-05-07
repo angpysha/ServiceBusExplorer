@@ -15,14 +15,31 @@
 
       <!-- Form -->
       <StackPanel Grid.Row="1"
-                  MaxWidth="520"
+                  MaxWidth="540"
                   HorizontalAlignment="Center"
                   VerticalAlignment="Center"
                   Spacing="8"
                   Margin="24">
 
+        <!-- Recent connections -->
+        <TextBlock Text="Recent Connections" FontWeight="SemiBold" Margin="0,8,0,2"
+                   IsVisible="{Binding ConnectionHistory.Count, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <ListBox ItemsSource="{Binding ConnectionHistory}"
+                 SelectionMode="Single"
+                 MaxHeight="140"
+                 IsVisible="{Binding ConnectionHistory.Count}"
+                 SelectionChanged="OnHistorySelectionChanged">
+          <ListBox.ItemTemplate>
+            <DataTemplate DataType="x:String">
+              <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" />
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
         <TextBlock Text="Connection String" FontWeight="SemiBold" Margin="0,8,0,2" />
-        <TextBox Text="{Binding ConnectionString}"
+        <TextBox x:Name="ConnectionStringBox"
+                 Text="{Binding ConnectionString}"
+                 AcceptsReturn="False"
                  Watermark="Endpoint=sb://namespace.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=..." />
 
         <TextBlock Text="Authentication" FontWeight="SemiBold" Margin="0,8,0,2" />

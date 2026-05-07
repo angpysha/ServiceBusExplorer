@@ -4,7 +4,73 @@
         x:Class="ServiceBusExplorer.App.Views.MainWindow"
         x:DataType="local:MainWindowViewModel"
         Title="Service Bus Explorer"
-        Width="1100" Height="720"
-        MinWidth="800" MinHeight="550">
-  <ContentControl Content="{Binding CurrentPage}" />
+        Width="1200" Height="760"
+        MinWidth="820" MinHeight="560">
+
+  <Grid RowDefinitions="Auto,*,Auto,Auto">
+
+    <!-- Menu bar -->
+    <Menu Grid.Row="0">
+      <MenuItem Header="Connection">
+        <MenuItem Header="Disconnect" Command="{Binding DisconnectCommand}" />
+      </MenuItem>
+      <MenuItem Header="View">
+        <MenuItem Header="Toggle Log Panel" Click="OnToggleLogPanel" />
+        <MenuItem Header="Clear Log" Click="OnClearLog" />
+      </MenuItem>
+      <MenuItem Header="Help">
+        <MenuItem Header="About…" Click="OnAbout" />
+      </MenuItem>
+    </Menu>
+
+    <!-- Main page content -->
+    <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" />
+
+    <!-- Resize handle for log panel -->
+    <GridSplitter Grid.Row="2"
+                  x:Name="LogSplitter"
+                  Height="4"
+                  HorizontalAlignment="Stretch"
+                  ResizeBehavior="PreviousAndNext"
+                  IsVisible="{Binding IsLogVisible, ElementName=LogPanel}" />
+
+    <!-- Log panel -->
+    <Border Grid.Row="3"
+            x:Name="LogPanel"
+            BorderThickness="0,1,0,0"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            IsVisible="False">
+      <Grid RowDefinitions="Auto,*">
+        <Border Grid.Row="0"
+                Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                Padding="8,4">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="Log" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button Content="Clear" Click="OnClearLog" Padding="8,2" />
+          </StackPanel>
+        </Border>
+        <ListBox Grid.Row="1"
+                 x:Name="LogListBox"
+                 ItemsSource="{Binding LogSink.Entries}"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 MaxHeight="200"
+                 FontFamily="Courier New,monospace"
+                 FontSize="11">
+          <ListBox.ItemTemplate>
+            <DataTemplate DataType="{x:Type local:LogEntry}">
+              <TextBlock>
+                <Run Text="{Binding Timestamp, StringFormat='HH:mm:ss'}"
+                     Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                <Run Text=" " />
+                <Run Text="{Binding Level}" />
+                <Run Text=" " />
+                <Run Text="{Binding Message}" />
+              </TextBlock>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+  </Grid>
 </Window>

@@ -12,10 +12,14 @@ public class AppBootstrapper : IDisposable
     private readonly IServiceProvider _appServices;
     private IServiceProvider? _connectionServices;
 
+    public readonly SettingsService Settings = new();
+    public readonly ObservableLoggerProvider LogSink = new();
+
     public AppBootstrapper()
     {
         var sc = new ServiceCollection();
-        sc.AddLogging(b => b.AddConsole());
+        sc.AddLogging(b => { b.AddConsole(); b.AddProvider(LogSink); });
+        sc.AddSingleton(Settings);
         sc.AddTransient<ConnectViewModel>();
         _appServices = sc.BuildServiceProvider();
     }
@@ -26,7 +30,7 @@ public class AppBootstrapper : IDisposable
     public async Task<AppMainViewModel> ConnectAsync(ConnectionOptions opts)
     {
         var sc = new ServiceCollection();
-        sc.AddLogging(b => b.AddConsole());
+        sc.AddLogging(b => { b.AddConsole(); b.AddProvider(LogSink); });
 
         sc.AddSingleton(_ => new ServiceBusAdministrationClient(opts.ConnectionString));
         sc.AddSingleton(_ => new ServiceBusClient(opts.ConnectionString));
@@ -45,6 +49,7 @@ public class AppBootstrapper : IDisposable
 
         sc.AddSingleton<QueueListViewModel>();
         sc.AddSingleton<TopicListViewModel>();
+        sc.AddSingleton<EventHubDetailViewModel>();
         sc.AddSingleton<EventHubListViewModel>();
         sc.AddSingleton<RelayListViewModel>();
         sc.AddSingleton<NotificationHubListViewModel>();
@@ -64,6 +69,8 @@ public class AppBootstrapper : IDisposable
 
         (_connectionServices as IDisposable)?.Dispose();
         _connectionServices = provider;
+
+        Settings.AddToHistory(opts.ConnectionString);
 
         return _connectionServices.GetRequiredService<AppMainViewModel>();
     }

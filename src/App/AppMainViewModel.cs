@@ -1,3 +1,4 @@
+using System.Reactive;
 using ReactiveUI;
 using ServiceBusExplorer.ViewModels;
 
@@ -10,6 +11,9 @@ public class AppMainViewModel : ReactiveObject
     public NavTreeViewModel Tree { get; }
 
     public ReactiveObject? CurrentContent => Tree.CurrentContent;
+
+    /// Set by MainWindowViewModel after construction so it can navigate back to ConnectView.
+    public ReactiveCommand<Unit, Unit>? DisconnectCommand { get; set; }
 
     public AppMainViewModel(MainViewModel mainVm)
     {

@@ -5,6 +5,12 @@
              xmlns:connect="using:ServiceBusExplorer.App.Views.Connect"
              xmlns:mainView="using:ServiceBusExplorer.App.Views.Main"
              xmlns:dash="using:ServiceBusExplorer.App.Views.Dashboard"
+             xmlns:queues="using:ServiceBusExplorer.App.Views.Queues"
+             xmlns:topics="using:ServiceBusExplorer.App.Views.Topics"
+             xmlns:subs="using:ServiceBusExplorer.App.Views.Subscriptions"
+             xmlns:hubs="using:ServiceBusExplorer.App.Views.EventHubs"
+             xmlns:relays="using:ServiceBusExplorer.App.Views.Relays"
+             xmlns:notif="using:ServiceBusExplorer.App.Views.NotificationHubs"
              x:Class="ServiceBusExplorer.App.App">
   <Application.Styles>
     <FluentTheme />
@@ -19,20 +25,47 @@
     <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
       <dash:DashboardView />
     </DataTemplate>
+
+    <!-- Queues -->
     <DataTemplate DataType="{x:Type vm:QueueListViewModel}">
-      <TextBlock Text="Queues — full list view coming in Phase 4" Margin="20" />
+      <queues:QueueListView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:QueueDetailViewModel}">
+      <queues:QueueDetailView />
+    </DataTemplate>
+
+    <!-- Topics -->
     <DataTemplate DataType="{x:Type vm:TopicListViewModel}">
-      <TextBlock Text="Topics — full list view coming in Phase 4" Margin="20" />
+      <topics:TopicListView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:TopicDetailViewModel}">
+      <topics:TopicDetailView />
+    </DataTemplate>
+
+    <!-- Subscriptions -->
+    <DataTemplate DataType="{x:Type vm:SubscriptionDetailViewModel}">
+      <subs:SubscriptionDetailView />
+    </DataTemplate>
+
+    <!-- Event Hubs -->
     <DataTemplate DataType="{x:Type vm:EventHubListViewModel}">
-      <TextBlock Text="Event Hubs — full list view coming in Phase 4" Margin="20" />
+      <hubs:EventHubListView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:EventHubDetailViewModel}">
+      <hubs:EventHubDetailView />
+    </DataTemplate>
+
+    <!-- Relays -->
     <DataTemplate DataType="{x:Type vm:RelayListViewModel}">
-      <TextBlock Text="Relays — full list view coming in Phase 4" Margin="20" />
+      <relays:RelayListView />
     </DataTemplate>
+
+    <!-- Notification Hubs -->
     <DataTemplate DataType="{x:Type vm:NotificationHubListViewModel}">
-      <TextBlock Text="Notification Hubs — full list view coming in Phase 4" Margin="20" />
+      <notif:NotificationHubListView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:NotificationHubDetailViewModel}">
+      <notif:NotificationHubDetailView />
     </DataTemplate>
   </Application.DataTemplates>
 </Application>
