@@ -36,6 +36,19 @@
                  MinHeight="60"
                  FontFamily="Cascadia Code,Consolas,monospace"
                  TextWrapping="Wrap" />
+
+        <Separator Margin="0,4" />
+
+        <!-- Batch count + schedule -->
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="Count:" VerticalAlignment="Center" />
+          <NumericUpDown Value="{Binding SendCount}" Minimum="1" Maximum="1000" Width="80" />
+          <CheckBox Content="Schedule in" IsChecked="{Binding UseScheduledTime}" VerticalAlignment="Center" />
+          <NumericUpDown Value="{Binding ScheduleDelayMinutes}" Minimum="1" Maximum="10080" Width="80"
+                         IsEnabled="{Binding UseScheduledTime}" />
+          <TextBlock Text="min from now" VerticalAlignment="Center"
+                     Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        </StackPanel>
       </StackPanel>
     </ScrollViewer>
 

@@ -22,6 +22,8 @@ public class SubscriptionDetailViewModel : ReactiveObject
     private int _peekCount = 20;
     private MessageSubQueue _selectedSubQueue = MessageSubQueue.None;
     private bool _showSendPanel;
+    private bool _isReceiveMode;
+    private IReceiveSession? _activeSession;
 
     // Editable fields
     private TimeSpan _lockDuration;
@@ -80,6 +82,12 @@ public class SubscriptionDetailViewModel : ReactiveObject
     {
         get => _showSendPanel;
         set => this.RaiseAndSetIfChanged(ref _showSendPanel, value);
+    }
+
+    public bool IsReceiveMode
+    {
+        get => _isReceiveMode;
+        private set => this.RaiseAndSetIfChanged(ref _isReceiveMode, value);
     }
 
     public TimeSpan LockDuration
@@ -152,6 +160,12 @@ public class SubscriptionDetailViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> PurgeCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleSendPanelCommand { get; }
     public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
+    public ReactiveCommand<Unit, Unit> StartReceiveCommand { get; }
+    public ReactiveCommand<Unit, Unit> StopReceiveCommand { get; }
+    public ReactiveCommand<Unit, Unit> ReceiveBatchCommand { get; }
+    public ReactiveCommand<ReceivedMessage, Unit> CompleteCommand { get; }
+    public ReactiveCommand<ReceivedMessage, Unit> AbandonCommand { get; }
+    public ReactiveCommand<ReceivedMessage, Unit> DeadLetterCommand { get; }
 
     public SubscriptionDetailViewModel(
         ISubscriptionService subSvc,
@@ -258,6 +272,101 @@ public class SubscriptionDetailViewModel : ReactiveObject
             finally
             {
                 IsSaving = false;
+            }
+        });
+
+        var hasSession = this.WhenAnyValue(x => x.IsReceiveMode);
+        var noSession  = this.WhenAnyValue(x => x.IsReceiveMode, m => !m);
+
+        StartReceiveCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            IsLoading = true;
+            Error = null;
+            try
+            {
+                _activeSession = await queueSvc.OpenReceiveSessionAsync(_entityPath, SelectedSubQueue);
+                _messageSource.Clear();
+                IsReceiveMode = true;
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }, noSession);
+
+        StopReceiveCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (_activeSession != null)
+            {
+                await _activeSession.DisposeAsync();
+                _activeSession = null;
+            }
+            IsReceiveMode = false;
+        }, hasSession);
+
+        ReceiveBatchCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (_activeSession == null) return;
+            IsLoading = true;
+            Error = null;
+            try
+            {
+                var msgs = await _activeSession.ReceiveBatchAsync(PeekCount);
+                _messageSource.AddRange(msgs);
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }, hasSession);
+
+        CompleteCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
+        {
+            if (_activeSession == null) return;
+            try
+            {
+                await _activeSession.CompleteAsync(msg);
+                _messageSource.Remove(msg);
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+            }
+        });
+
+        AbandonCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
+        {
+            if (_activeSession == null) return;
+            try
+            {
+                await _activeSession.AbandonAsync(msg);
+                _messageSource.Remove(msg);
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+            }
+        });
+
+        DeadLetterCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
+        {
+            if (_activeSession == null) return;
+            try
+            {
+                await _activeSession.DeadLetterAsync(msg);
+                _messageSource.Remove(msg);
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
             }
         });
 

@@ -10,7 +10,8 @@ public record OutboundMessage(
     string? CorrelationId = null,
     string? SessionId = null,
     string? To = null,
-    IReadOnlyDictionary<string, object>? Properties = null);
+    IReadOnlyDictionary<string, object>? Properties = null,
+    DateTimeOffset? ScheduledEnqueueTime = null);
 
 public record ReceivedMessage(
     string MessageId,
@@ -23,4 +24,5 @@ public record ReceivedMessage(
     string? CorrelationId,
     string? SessionId,
     IReadOnlyDictionary<string, object> Properties,
-    string? DeadLetterReason = null);
+    string? DeadLetterReason = null,
+    string? LockToken = null);

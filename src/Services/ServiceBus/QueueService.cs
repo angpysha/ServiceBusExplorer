@@ -108,6 +108,8 @@ public class QueueService : IQueueService
         if (message.CorrelationId != null) msg.CorrelationId = message.CorrelationId;
         if (message.SessionId != null) msg.SessionId = message.SessionId;
         if (message.To != null) msg.To = message.To;
+        if (message.ScheduledEnqueueTime.HasValue)
+            msg.ScheduledEnqueueTime = message.ScheduledEnqueueTime.Value;
         if (message.Properties != null)
             foreach (var (k, v) in message.Properties)
                 msg.ApplicationProperties[k] = v;
@@ -136,6 +138,20 @@ public class QueueService : IQueueService
         }
     }
 
+    public Task<IReceiveSession> OpenReceiveSessionAsync(string name,
+        MessageSubQueue sub = MessageSubQueue.None, CancellationToken ct = default)
+    {
+        var subQueue = sub switch
+        {
+            MessageSubQueue.DeadLetter => SubQueue.DeadLetter,
+            MessageSubQueue.TransferDeadLetter => SubQueue.TransferDeadLetter,
+            _ => SubQueue.None
+        };
+        var receiver = _client.CreateReceiver(name,
+            new ServiceBusReceiverOptions { SubQueue = subQueue });
+        return Task.FromResult<IReceiveSession>(new ReceiveSession(receiver));
+    }
+
     private static QueueInfo MapFull(Azure.Messaging.ServiceBus.Administration.QueueProperties p,
         QueueRuntimeProperties r) => new(
         Name: p.Name,
@@ -158,12 +174,13 @@ public class QueueService : IQueueService
         SizeInBytes: r.SizeInBytes,
         EnableDeadLetteringOnMessageExpiration: p.DeadLetteringOnMessageExpiration);
 
+    // Peek messages don't have a valid lock token — LockToken stays null (default)
     private static ReceivedMessage MapMessage(ServiceBusReceivedMessage m) => new(
         m.MessageId, m.Body.ToString(), m.ContentType ?? "application/octet-stream",
         m.SequenceNumber, m.DeliveryCount, m.EnqueuedTime, m.ExpiresAt,
         m.CorrelationId, m.SessionId,
         m.ApplicationProperties.ToDictionary(kv => kv.Key, kv => kv.Value),
-        m.DeadLetterReason);
+        m.DeadLetterReason, LockToken: null);
 
     private static CoreEntityStatus MapEntityStatus(SBEntityStatus s)
     {

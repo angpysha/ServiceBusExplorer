@@ -15,6 +15,9 @@ public class SendMessageViewModel : ReactiveObject
     private string _propertiesJson = "";
     private bool _isSending;
     private string? _error;
+    private int _sendCount = 1;
+    private bool _useScheduledTime;
+    private int _scheduleDelayMinutes = 5;
 
     public string Body
     {
@@ -70,6 +73,24 @@ public class SendMessageViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _error, value);
     }
 
+    public int SendCount
+    {
+        get => _sendCount;
+        set => this.RaiseAndSetIfChanged(ref _sendCount, value);
+    }
+
+    public bool UseScheduledTime
+    {
+        get => _useScheduledTime;
+        set => this.RaiseAndSetIfChanged(ref _useScheduledTime, value);
+    }
+
+    public int ScheduleDelayMinutes
+    {
+        get => _scheduleDelayMinutes;
+        set => this.RaiseAndSetIfChanged(ref _scheduleDelayMinutes, value);
+    }
+
     public ReactiveCommand<Unit, Unit> SendCommand { get; }
 
     public SendMessageViewModel(IQueueService svc, string entityPath)
@@ -95,16 +116,25 @@ public class SendMessageViewModel : ReactiveObject
                     }
                 }
 
-                var msg = new OutboundMessage(
+                var baseMsg = new OutboundMessage(
                     Body: Body,
                     ContentType: string.IsNullOrWhiteSpace(ContentType) ? "application/json" : ContentType,
                     MessageId: string.IsNullOrWhiteSpace(MessageId) ? null : MessageId,
                     CorrelationId: string.IsNullOrWhiteSpace(CorrelationId) ? null : CorrelationId,
                     SessionId: string.IsNullOrWhiteSpace(SessionId) ? null : SessionId,
                     To: string.IsNullOrWhiteSpace(To) ? null : To,
-                    Properties: props);
+                    Properties: props,
+                    ScheduledEnqueueTime: UseScheduledTime
+                        ? DateTimeOffset.Now.AddMinutes(ScheduleDelayMinutes)
+                        : null);
 
-                await svc.SendAsync(entityPath, msg);
+                var count = Math.Max(1, SendCount);
+                for (var i = 0; i < count; i++)
+                {
+                    await svc.SendAsync(entityPath, baseMsg);
+                    if (i < count - 1)
+                        await Task.Delay(50); // brief pause between batch sends
+                }
                 Body = "";
             }
             catch (Exception ex)
