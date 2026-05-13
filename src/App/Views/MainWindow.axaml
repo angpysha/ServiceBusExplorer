@@ -58,14 +58,21 @@
                  FontSize="11">
           <ListBox.ItemTemplate>
             <DataTemplate DataType="{x:Type local:LogEntry}">
-              <TextBlock>
-                <Run Text="{Binding Timestamp, StringFormat='HH:mm:ss'}"
-                     Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-                <Run Text=" " />
-                <Run Text="{Binding Level}" />
-                <Run Text=" " />
-                <Run Text="{Binding Message}" />
-              </TextBlock>
+              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
+                <!-- Timestamp -->
+                <TextBlock Text="{Binding Timestamp, StringFormat='HH:mm:ss'}"
+                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                           VerticalAlignment="Center" MinWidth="52" />
+                <!-- Level chip -->
+                <Border Background="{Binding LevelColor, Converter={StaticResource HexColor}}"
+                        CornerRadius="3" Padding="5,1" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding LevelShort}"
+                             Foreground="White" FontWeight="SemiBold" FontSize="10" />
+                </Border>
+                <!-- Message -->
+                <TextBlock Text="{Binding Message}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>

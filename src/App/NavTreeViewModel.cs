@@ -94,12 +94,12 @@ public class NavTreeViewModel : ReactiveObject
         _relays = mainVm.Relays;
         _notifHubs = mainVm.NotificationHubs;
 
-        _dashboardFolder = new FolderNode("Dashboard", new ObservableCollection<NavTreeNode>());
-        _queuesFolder = new FolderNode("Queues", new ObservableCollection<NavTreeNode>());
-        _topicsFolder = new FolderNode("Topics", new ObservableCollection<NavTreeNode>());
-        _eventHubsFolder = new FolderNode("Event Hubs", new ObservableCollection<NavTreeNode>());
-        _relaysFolder = new FolderNode("Relays", new ObservableCollection<NavTreeNode>());
-        _notifHubsFolder = new FolderNode("Notification Hubs", new ObservableCollection<NavTreeNode>());
+        _dashboardFolder = new FolderNode("📊 Dashboard", new ObservableCollection<NavTreeNode>());
+        _queuesFolder = new FolderNode("📬 Queues", new ObservableCollection<NavTreeNode>());
+        _topicsFolder = new FolderNode("📢 Topics", new ObservableCollection<NavTreeNode>());
+        _eventHubsFolder = new FolderNode("⚡ Event Hubs", new ObservableCollection<NavTreeNode>());
+        _relaysFolder = new FolderNode("🔗 Relays", new ObservableCollection<NavTreeNode>());
+        _notifHubsFolder = new FolderNode("🔔 Notification Hubs", new ObservableCollection<NavTreeNode>());
 
         RootNodes.Add(_dashboardFolder);
         RootNodes.Add(_queuesFolder);

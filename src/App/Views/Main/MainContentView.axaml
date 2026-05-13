@@ -6,19 +6,24 @@
              x:Class="ServiceBusExplorer.App.Views.Main.MainContentView">
   <Grid RowDefinitions="Auto,*">
 
-    <!-- Title bar -->
-    <Border Grid.Row="0"
-            Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}"
-            Padding="12,8">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Grid.Column="0"
+    <!-- Title bar — Azure blue -->
+    <Border Grid.Row="0" Background="#0078D4" Padding="12,8">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <!-- Cloud icon -->
+        <TextBlock Grid.Column="0" Text="☁" FontSize="18" Foreground="White"
+                   VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBlock Grid.Column="1"
                    Text="{Binding NamespaceName}"
-                   FontSize="16" FontWeight="SemiBold"
+                   FontSize="15" FontWeight="SemiBold"
+                   Foreground="White"
                    VerticalAlignment="Center" />
-        <Button Grid.Column="1"
+        <Button Grid.Column="2"
                 Content="Disconnect"
                 Command="{Binding DisconnectCommand}"
                 IsVisible="{Binding DisconnectCommand, Converter={x:Static ObjectConverters.IsNotNull}}"
+                Background="Transparent"
+                Foreground="White"
+                BorderBrush="#80FFFFFF"
                 VerticalAlignment="Center" />
       </Grid>
     </Border>

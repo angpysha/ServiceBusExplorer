@@ -1,16 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             xmlns:local="using:ServiceBusExplorer.App"
              x:DataType="vm:ConnectViewModel"
              x:Class="ServiceBusExplorer.App.Views.Connect.ConnectView">
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <Grid RowDefinitions="Auto,*">
 
-      <!-- Header -->
-      <Border Grid.Row="0" Background="{DynamicResource SystemControlBackgroundChromeMediumBrush}" Padding="20,16">
-        <TextBlock Text="Service Bus Explorer"
-                   FontSize="22" FontWeight="SemiBold"
-                   HorizontalAlignment="Center" />
+      <!-- Hero header — Azure blue band -->
+      <Border Grid.Row="0" Background="#0078D4" Padding="20,28,20,24">
+        <StackPanel HorizontalAlignment="Center" Spacing="6">
+          <TextBlock Text="☁" FontSize="36" HorizontalAlignment="Center" Foreground="White" />
+          <TextBlock Text="Service Bus Explorer"
+                     FontSize="24" FontWeight="SemiBold"
+                     HorizontalAlignment="Center" Foreground="White" />
+          <TextBlock Text="Azure Service Bus Management"
+                     FontSize="12" HorizontalAlignment="Center"
+                     Foreground="#AACCEE" />
+        </StackPanel>
       </Border>
 
       <!-- Form -->
@@ -18,42 +25,58 @@
                   MaxWidth="540"
                   HorizontalAlignment="Center"
                   VerticalAlignment="Center"
-                  Spacing="8"
-                  Margin="24">
+                  Spacing="6"
+                  Margin="24,20,24,24">
 
         <!-- Recent connections -->
-        <TextBlock Text="Recent Connections" FontWeight="SemiBold" Margin="0,8,0,2"
-                   IsVisible="{Binding ConnectionHistory.Count, Converter={x:Static ObjectConverters.IsNotNull}}" />
-        <ListBox ItemsSource="{Binding ConnectionHistory}"
-                 SelectionMode="Single"
-                 MaxHeight="140"
-                 IsVisible="{Binding ConnectionHistory.Count}"
-                 SelectionChanged="OnHistorySelectionChanged">
-          <ListBox.ItemTemplate>
-            <DataTemplate DataType="x:String">
-              <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" />
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
+        <TextBlock Text="Recent Connections" FontWeight="SemiBold" Margin="0,4,0,4"
+                   IsVisible="{Binding ConnectionHistory.Count}" />
+        <Border IsVisible="{Binding ConnectionHistory.Count}"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                BorderThickness="1" CornerRadius="4">
+          <ListBox ItemsSource="{Binding ConnectionHistory}"
+                   SelectionMode="Single"
+                   MaxHeight="130"
+                   Background="Transparent"
+                   BorderThickness="0"
+                   SelectionChanged="OnHistorySelectionChanged">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="Auto,*" Margin="2,1">
+                  <!-- Colored dot indicator -->
+                  <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4"
+                          Background="#0078D4" Margin="0,0,8,0"
+                          VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1"
+                             Text="{Binding ., Converter={StaticResource CSLabel}}"
+                             FontWeight="SemiBold"
+                             VerticalAlignment="Center" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Border>
 
-        <TextBlock Text="Connection String" FontWeight="SemiBold" Margin="0,8,0,2" />
+        <!-- Connection String -->
+        <TextBlock Text="Connection String" FontWeight="SemiBold" Margin="0,10,0,4" />
         <TextBox x:Name="ConnectionStringBox"
                  Text="{Binding ConnectionString}"
                  AcceptsReturn="False"
                  Watermark="Endpoint=sb://namespace.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=..." />
 
-        <TextBlock Text="Authentication" FontWeight="SemiBold" Margin="0,8,0,2" />
+        <!-- Auth Mode -->
+        <TextBlock Text="Authentication" FontWeight="SemiBold" Margin="0,10,0,4" />
         <ComboBox ItemsSource="{x:Static vm:ConnectViewModel.AuthModes}"
                   SelectedItem="{Binding AuthMode}"
                   HorizontalAlignment="Stretch" />
 
-        <TextBlock Text="Tenant ID (optional, for AAD)" Margin="0,8,0,2" />
+        <TextBlock Text="Tenant ID (optional, for AAD)" Margin="0,10,0,4" />
         <TextBox Text="{Binding TenantId}" Watermark="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
 
-        <TextBlock Text="Entity Path (optional)" Margin="0,8,0,2" />
+        <TextBlock Text="Entity Path (optional)" Margin="0,6,0,4" />
         <TextBox Text="{Binding EntityPath}" Watermark="queue-or-topic-name" />
 
-        <TextBlock Text="Load entity types" FontWeight="SemiBold" Margin="0,12,0,4" />
+        <TextBlock Text="Load entity types" FontWeight="SemiBold" Margin="0,10,0,4" />
         <WrapPanel Orientation="Horizontal">
           <CheckBox IsChecked="{Binding LoadQueues}" Content="Queues" Margin="0,0,16,4" />
           <CheckBox IsChecked="{Binding LoadTopics}" Content="Topics" Margin="0,0,16,4" />
@@ -62,23 +85,33 @@
           <CheckBox IsChecked="{Binding LoadNotificationHubs}" Content="Notification Hubs" Margin="0,0,16,4" />
         </WrapPanel>
 
-        <TextBlock Text="{Binding ErrorMessage}"
-                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
-                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                   TextWrapping="Wrap"
-                   Margin="0,8,0,0" />
+        <!-- Error -->
+        <Border IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                Background="#20D13438" CornerRadius="4" Padding="10,8" Margin="0,8,0,0">
+          <TextBlock Text="{Binding ErrorMessage}"
+                     Foreground="#D13438"
+                     TextWrapping="Wrap" />
+        </Border>
 
+        <!-- Connect button -->
         <Button Content="Connect"
                 Command="{Binding ConnectCommand}"
                 HorizontalAlignment="Stretch"
                 HorizontalContentAlignment="Center"
-                Margin="0,12,0,0"
-                Padding="0,10" />
+                Background="#0078D4"
+                Foreground="White"
+                Margin="0,14,0,0"
+                Padding="0,12" />
 
-        <TextBlock Text="Connecting…"
-                   IsVisible="{Binding IsConnecting}"
-                   HorizontalAlignment="Center"
-                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        <!-- Connecting indicator -->
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+                    IsVisible="{Binding IsConnecting}" Margin="0,4,0,0">
+          <TextBlock Text="⟳" FontSize="14"
+                     Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+          <TextBlock Text="Connecting…"
+                     Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        </StackPanel>
+
       </StackPanel>
     </Grid>
   </ScrollViewer>

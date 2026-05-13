@@ -1,54 +1,83 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             xmlns:local="using:ServiceBusExplorer.App"
              x:DataType="vm:DashboardViewModel"
              x:Class="ServiceBusExplorer.App.Views.Dashboard.DashboardView">
   <Grid RowDefinitions="Auto,Auto,*">
 
     <!-- Header -->
-    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12,16,8" Spacing="12">
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,14,16,10" Spacing="12">
       <TextBlock Text="Dashboard" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-      <Button Content="Refresh" Command="{Binding RefreshCommand}" VerticalAlignment="Center" />
-      <TextBlock Text="Loading…"
-                 IsVisible="{Binding IsLoading}"
-                 VerticalAlignment="Center"
-                 Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+      <Button Content="⟳  Refresh" Command="{Binding RefreshCommand}" VerticalAlignment="Center" />
+      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                  IsVisible="{Binding IsLoading}">
+        <TextBlock Text="Loading…"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+      </StackPanel>
     </StackPanel>
 
     <!-- Column headers -->
-    <Grid Grid.Row="1"
-          ColumnDefinitions="*,100,100,100,100"
-          Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
-          Margin="16,0">
-      <TextBlock Grid.Column="0" Text="Name" FontWeight="SemiBold" Padding="8,6" />
-      <TextBlock Grid.Column="1" Text="Type" FontWeight="SemiBold" Padding="8,6" />
-      <TextBlock Grid.Column="2" Text="Active" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
-      <TextBlock Grid.Column="3" Text="Dead Letter" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
-      <TextBlock Grid.Column="4" Text="Sched/Subs" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
-    </Grid>
+    <Border Grid.Row="1" Margin="16,0"
+            Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
+            CornerRadius="4,4,0,0">
+      <Grid ColumnDefinitions="*,110,100,100,110">
+        <TextBlock Grid.Column="0" Text="Name" FontWeight="SemiBold" Padding="10,7" />
+        <TextBlock Grid.Column="1" Text="Type" FontWeight="SemiBold" Padding="6,7" />
+        <TextBlock Grid.Column="2" Text="Active" FontWeight="SemiBold" Padding="8,7"
+                   HorizontalAlignment="Right" />
+        <TextBlock Grid.Column="3" Text="Dead-letter" FontWeight="SemiBold" Padding="8,7"
+                   HorizontalAlignment="Right" />
+        <TextBlock Grid.Column="4" Text="Sched / Subs" FontWeight="SemiBold" Padding="8,7"
+                   HorizontalAlignment="Right" />
+      </Grid>
+    </Border>
 
     <!-- Rows -->
     <ListBox Grid.Row="2"
              ItemsSource="{Binding Rows}"
-             Margin="16,0"
+             Margin="16,0,16,4"
              Background="Transparent"
-             BorderThickness="0">
+             BorderThickness="1"
+             BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+             CornerRadius="0,0,4,4">
       <ListBox.ItemTemplate>
         <DataTemplate DataType="{x:Type vm:DashboardRow}">
-          <Grid ColumnDefinitions="*,100,100,100,100">
-            <TextBlock Grid.Column="0" Text="{Binding Name}" Padding="8,4" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Text="{Binding Type}" Padding="8,4" VerticalAlignment="Center"
-                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-            <TextBlock Grid.Column="2" Text="{Binding Active}" Padding="8,4" VerticalAlignment="Center"
+          <Grid ColumnDefinitions="*,110,100,100,110" Margin="0,1">
+            <!-- Name -->
+            <TextBlock Grid.Column="0" Text="{Binding Name}"
+                       Padding="10,6" VerticalAlignment="Center"
+                       FontWeight="Medium" />
+            <!-- Type badge -->
+            <Border Grid.Column="1"
+                    Background="{Binding TypeColor, Converter={StaticResource HexColor}}"
+                    CornerRadius="12" Padding="10,3"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Margin="4,0">
+              <TextBlock Text="{Binding Type}"
+                         Foreground="White"
+                         FontSize="11" FontWeight="SemiBold" />
+            </Border>
+            <!-- Active count -->
+            <TextBlock Grid.Column="2" Text="{Binding Active}"
+                       Padding="8,6" VerticalAlignment="Center"
                        HorizontalAlignment="Right" />
-            <TextBlock Grid.Column="3" Text="{Binding DeadLetter}" Padding="8,4" VerticalAlignment="Center"
+            <!-- Dead-letter count — red when >0 -->
+            <TextBlock Grid.Column="3" Text="{Binding DeadLetter}"
+                       Padding="8,6" VerticalAlignment="Center"
                        HorizontalAlignment="Right"
-                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}" />
-            <TextBlock Grid.Column="4" Text="{Binding Scheduled}" Padding="8,4" VerticalAlignment="Center"
-                       HorizontalAlignment="Right" />
+                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                       FontWeight="SemiBold" />
+            <!-- Scheduled / Subscriptions -->
+            <TextBlock Grid.Column="4" Text="{Binding Scheduled}"
+                       Padding="8,6" VerticalAlignment="Center"
+                       HorizontalAlignment="Right"
+                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
           </Grid>
         </DataTemplate>
       </ListBox.ItemTemplate>
     </ListBox>
+
   </Grid>
 </UserControl>

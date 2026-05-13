@@ -3,7 +3,25 @@ using Microsoft.Extensions.Logging;
 
 namespace ServiceBusExplorer.App;
 
-public record LogEntry(DateTime Timestamp, string Level, string Category, string Message);
+public record LogEntry(DateTime Timestamp, string Level, string Category, string Message)
+{
+    public string LevelShort => Level switch
+    {
+        "Information" => "INFO",
+        "Warning"     => "WARN",
+        "Error"       => "ERRO",
+        "Critical"    => "CRIT",
+        _             => Level[..Math.Min(4, Level.Length)].ToUpperInvariant()
+    };
+
+    public string LevelColor => Level switch
+    {
+        "Error" or "Critical" => "#D13438",
+        "Warning"             => "#CA5010",
+        "Information"         => "#0078D4",
+        _                     => "#767676"
+    };
+}
 
 /// ILogger implementation that writes to an in-memory ObservableCollection.
 public sealed class ObservableLogger(string category, ObservableCollection<LogEntry> entries) : ILogger

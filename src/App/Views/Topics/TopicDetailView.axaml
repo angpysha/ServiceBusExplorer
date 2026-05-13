@@ -34,26 +34,25 @@
 
             <!-- Read-only stats -->
             <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
-              <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                      CornerRadius="4" Padding="10,6" Margin="0,0,8,8">
+              <!-- Subscriptions: purple -->
+              <Border Background="#208764B8" CornerRadius="6" Padding="14,8" Margin="0,0,10,10">
                 <StackPanel>
-                  <TextBlock Text="Subscriptions" FontSize="11"
-                             Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                  <TextBlock Text="Subscriptions" FontSize="11" Foreground="#8764B8" FontWeight="SemiBold" />
                   <TextBlock Text="{Binding Topic.SubscriptionCount, FallbackValue='—'}"
-                             FontSize="20" FontWeight="SemiBold" />
+                             FontSize="22" FontWeight="SemiBold" />
                 </StackPanel>
               </Border>
-              <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                      CornerRadius="4" Padding="10,6" Margin="0,0,8,8">
+              <!-- Size: teal -->
+              <Border Background="#20038387" CornerRadius="6" Padding="14,8" Margin="0,0,10,10">
                 <StackPanel>
-                  <TextBlock Text="Size (bytes)" FontSize="11"
-                             Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                  <TextBlock Text="Size (bytes)" FontSize="11" Foreground="#038387" FontWeight="SemiBold" />
                   <TextBlock Text="{Binding Topic.SizeInBytes, FallbackValue='—'}"
                              FontSize="16" FontWeight="SemiBold" />
                 </StackPanel>
               </Border>
+              <!-- Status: neutral -->
               <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                      CornerRadius="4" Padding="10,6" Margin="0,0,8,8">
+                      CornerRadius="6" Padding="14,8" Margin="0,0,10,10">
                 <StackPanel>
                   <TextBlock Text="Status" FontSize="11"
                              Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />

@@ -15,6 +15,13 @@
   <Application.Styles>
     <FluentTheme />
   </Application.Styles>
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <local:HexColorConverter x:Key="HexColor" />
+      <local:ConnectionStringLabelConverter x:Key="CSLabel" />
+    </ResourceDictionary>
+  </Application.Resources>
   <Application.DataTemplates>
     <DataTemplate DataType="{x:Type vm:ConnectViewModel}">
       <connect:ConnectView />

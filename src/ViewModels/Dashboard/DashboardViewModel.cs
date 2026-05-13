@@ -6,7 +6,18 @@ using ReactiveUI;
 
 namespace ServiceBusExplorer.ViewModels;
 
-public record DashboardRow(string Name, string Type, long Active, long DeadLetter, long Scheduled);
+public record DashboardRow(string Name, string Type, long Active, long DeadLetter, long Scheduled)
+{
+    public string TypeColor => Type switch
+    {
+        "Queue"            => "#0078D4",
+        "Topic"            => "#8764B8",
+        "Event Hub"        => "#CA5010",
+        "Relay"            => "#038387",
+        "Notification Hub" => "#107C10",
+        _                  => "#767676"
+    };
+}
 
 public class DashboardViewModel : ReactiveObject
 {
