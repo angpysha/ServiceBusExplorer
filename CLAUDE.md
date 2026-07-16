@@ -57,3 +57,17 @@ Domain libraries target `netstandard2.0` for portability; the UI, Common, and No
 - Use `async`/`await` correctly — avoid sync-over-async (`Task.Result`, `.Wait()`)
 - Document public APIs with XML doc comments
 - Line endings: CRLF; indentation: 4 spaces for `.cs`, 2 spaces for `.config`
+
+
+<!-- agentic-pipeline:begin -->
+## AI Dev Pipeline
+
+This project uses the agent-orchestrated SDLC pipeline.
+
+- Agent index: [AGENTS.md](AGENTS.md)
+- Adapt skill (run after install): [.agents/SKILL.md](.agents/SKILL.md)
+- Contract: [pipeline.manifest.json](pipeline.manifest.json)
+
+If not yet adapted, run: **Run .agents adapt**
+After ready, run: **Run SDLC for: {feature}**
+<!-- agentic-pipeline:end -->

@@ -1,0 +1,79 @@
+{
+  "project_brief": "PROJECT.md",
+  "code_search_source": "mcp-codebase-search",
+  "detected_signals": [
+    "PROJECT.md: C#, .NET 10, Avalonia 11, ReactiveUI",
+    "codesearch: 9471 semantic chunks across 459 files",
+    "codesearch: Avalonia App, ViewModels, Services, and migration plan",
+    "codesearch: Azure Identity, modern messaging SDKs, and legacy SDK boundaries",
+    "filesystem: 13 .csproj files and src/ServiceBusExplorer.sln",
+    "filesystem: xUnit test project",
+    "filesystem: GitHub Actions workflows",
+    "filesystem: beads tracker",
+    "source: Azure Identity and messaging SDK packages"
+  ],
+  "packs": [
+    {
+      "name": "dotnet-minimal",
+      "score": 1.0,
+      "features": []
+    }
+  ],
+  "agents": [
+    {
+      "name": "coordinator",
+      "enabled": true
+    },
+    {
+      "name": "ba-analyst",
+      "enabled": true
+    },
+    {
+      "name": "architect",
+      "enabled": true
+    },
+    {
+      "name": "team-lead",
+      "enabled": true
+    },
+    {
+      "name": "developer",
+      "enabled": true
+    },
+    {
+      "name": "tester",
+      "enabled": true
+    },
+    {
+      "name": "security-reviewer",
+      "enabled": true
+    },
+    {
+      "name": "tech-writer",
+      "enabled": true
+    }
+  ],
+  "tracker": {
+    "type": "beads",
+    "prefix": "ServiceBusExplorer"
+  },
+  "pr": {
+    "type": "manual",
+    "target_branch": "main"
+  },
+  "host": "cursor",
+  "build": {
+    "command": "dotnet build src/ --configuration Release --verbosity minimal"
+  },
+  "test": {
+    "command": "pwsh .cursor/skills/dotnet-unit-tests/scripts/dotnet-unit-tests.ps1"
+  },
+  "format": {
+    "command": ""
+  },
+  "spec_kit": {
+    "enabled": true,
+    "integration": "cursor"
+  },
+  "confidence": "high"
+}

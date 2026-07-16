@@ -1,0 +1,31 @@
+---
+description: Codebase discovery order — mcp-codebase-search MCP first, then graphify, then Grep/Glob/Read
+alwaysApply: true
+---
+
+# Code Search Priority & Codebase Dedupe Protocol
+
+When exploring the repo, verifying implementations, or detecting stack during adapt:
+
+1. **`mcp-codebase-search` MCP** ([teknologika/mcp-codebase-search](https://github.com/teknologika/mcp-codebase-search/)) — `list_codebases`, `search_codebases`, `get_codebase_stats`, `get_chunk_content`, `get_file_content`, `get_adjacent_chunks`, `list_files`, `update_codebase_scan`
+2. **graphify** — `graphify . --no-viz` + `graphify-out/GRAPH_REPORT.md` if MCP unavailable
+3. **Default tools** — Grep, Glob, Read (last resort)
+
+Full playbook: `skills/code-search/SKILL.md`.
+
+## Codebase Dedupe Protocol
+
+**codebase-search is the *only valid source*** for claims about what already exists in this
+repo during a session. Run `update_codebase_scan` after edits to refresh the index.
+
+**Hard rule — no creation without a Dedupe Ticket.** Before adding a new file, module, class,
+function, or helper, produce:
+
+- **Intent signature** — one sentence describing what you are about to add
+- **Queries** — 2–4 searches you will run
+- **Top matches** — up to 5 file paths returned by the tool
+- **Decision** — `reuse | extend | new`
+- **Rationale** — why
+
+If neither MCP nor graphify is available, state **DEGRADED MODE** and stop before making
+structural claims or changes.

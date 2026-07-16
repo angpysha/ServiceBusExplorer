@@ -174,3 +174,4 @@ $RECYCLE.BIN/
 .dolt/
 *.db
 .beads-credential-key
+_code_agent/
