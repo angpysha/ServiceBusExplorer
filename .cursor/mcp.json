@@ -1,7 +1,8 @@
 {
   "mcpServers": {
     "codesearch": {
-      "command": "codesearch",
+      "type": "stdio",
+      "command": "/Users/andrii/.local/bin/codesearch",
       "args": [
         "mcp"
       ]
