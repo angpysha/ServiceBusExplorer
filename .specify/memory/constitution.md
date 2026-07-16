@@ -1,14 +1,14 @@
 <!--
 Sync Impact Report
-- Version change: template -> 1.0.0
-- Modified principles: placeholder principles -> five project-specific principles
-- Added sections: Technical and Security Constraints; Development Workflow and Quality Gates
+- Version change: 1.0.0 -> 1.0.1
+- Modified principles: none
+- Added sections: none
 - Removed sections: none
 - Templates:
   - ✅ .specify/templates/plan-template.md (Constitution Check remains the enforcement gate)
   - ✅ .specify/templates/spec-template.md (testing and measurable outcomes already mandatory)
-  - ✅ .specify/templates/tasks-template.md (test policy aligned)
-  - ✅ .specify/templates/commands/*.md (directory absent; no files to update)
+  - ✅ .specify/templates/tasks-template.md (all test guidance aligned with Principle IV)
+  - ✅ .agents/skills/speckit-*/SKILL.md (all ten Spec Kit workflows installed and validated)
 - Runtime guidance:
   - ✅ PROJECT.md
   - ✅ AGENTS.md
@@ -87,4 +87,4 @@ request review MUST verify applicable principles. Approved exceptions MUST ident
 expiry or removal criteria, and compensating controls. `PROJECT.md`, `AGENTS.md`, and repository
 guidance provide operational context but cannot weaken this constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-07-16
+**Version**: 1.0.1 | **Ratified**: 2026-07-16 | **Last Amended**: 2026-07-16
