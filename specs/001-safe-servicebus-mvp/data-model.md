@@ -9,6 +9,8 @@ These are logical models and invariants. Azure SDK types remain inside Services 
 ```mermaid
 erDiagram
     CONNECTION_PROFILE ||--o| ENTITY_SCOPE : records
+    CONNECTION_PROFILE ||--o| CREDENTIAL_REFERENCE : may_reference
+    CREDENTIAL_REFERENCE ||--o| SAVED_SAS_CREDENTIAL : addresses_in_native_vault
     CONNECTION_REQUEST ||--|| CONNECTION_PROFILE : references
     CONNECTION_REQUEST ||--|| TRANSIENT_CREDENTIAL : supplies
     LIVE_CONNECTION ||--|| CONNECTION_PROFILE : represents
@@ -38,10 +40,69 @@ Secret-free persisted identity for reconnect.
 | Scope | `NamespaceScope` or `EntityScope` | Required |
 | LoadingOptions | flags | Service Bus options only; excluded services have no flags |
 | DisplayPreferences | allowlisted record | No body, property, token, or credential fields |
+| CredentialReference | opaque random string? | SAS only; optional; CSPRNG-generated and not derived from credential/profile data |
 | SchemaVersion | positive integer | Required for defensive migration |
 
 Validation rejects URI user information, query secrets, SAS key fields, complete connection
 strings, and unknown serialized fields that could contain secret material.
+
+## CredentialReference, SavedSasCredential, and VaultOutcome
+
+`CredentialReference` is a high-entropy random identifier used as the native-vault item key under
+an application-specific service namespace. It is non-secret, contains no namespace, entity, key
+name, hash, or credential-derived data, and is useless as authentication material.
+
+`SavedSasCredential` is a full SAS connection string that exists only:
+
+- transiently in memory while supplied to the connection factory or vault operation; and
+- as the secret payload of the current OS user's designated native credential vault.
+
+It is never a profile/settings field. Microsoft Entra access/refresh tokens are not
+`SavedSasCredential` values and are outside this feature.
+
+`CredentialVaultStatus` is a closed set:
+
+- `Available`
+- `Unavailable`
+- `Locked`
+- `PermissionDenied`
+- `ProviderMissing`
+- `Unsupported`
+- `NotFound`
+- `Uncertain`
+- `Failure`
+
+Store/retrieve/delete return typed results containing status and safe recovery guidance. A
+successful retrieve may carry a transient secret wrapper whose value is not serializable or
+printable. Failure results never carry the secret or raw native error text.
+
+Vault lifecycle:
+
+```mermaid
+stateDiagram-v2
+    [*] --> NotSaved: toggle off by default
+    NotSaved --> Saved: explicit store succeeds
+    NotSaved --> NotSaved: store fails
+    Saved --> Saved: explicit replacement succeeds
+    Saved --> PromptForSas: unavailable/locked/denied/missing
+    PromptForSas --> Saved: manual SAS used without replacement
+    PromptForSas --> Saved: explicit replacement succeeds
+    Saved --> Deleted: explicit vault cleanup succeeds
+    Saved --> CleanupFailed: cleanup requested but fails
+    CleanupFailed --> Saved: profile/reference retained for retry
+    Deleted --> [*]
+```
+
+Profile persistence ordering:
+
+1. A new save generates a reference and stores the SAS in the vault.
+2. Only a successful store permits persisting that reference in the profile.
+3. Replacement uses the existing reference and does not silently create another item. A
+   failed/uncertain result keeps the reference and does not claim whether the old or new value is
+   present; the user may retry or enter SAS manually.
+4. Profile removal without vault cleanup removes metadata only after explicit user choice.
+5. Profile removal with cleanup attempts vault deletion first; failure keeps the profile/reference
+   available for retry unless the user explicitly chooses metadata-only deletion after being warned.
 
 ## ConnectionRequest and TransientCredential
 
@@ -53,6 +114,8 @@ Ephemeral input used to establish one live context.
   - `SasConnectionString` held only for the attempt/live client construction.
   - `TokenCredentialReference` wrapping the selected Azure Identity credential.
 - Neither type is serializable by the profile store or included in diagnostic context.
+- A reconnect may resolve `CredentialReference` through `ICredentialVault`; any non-success result
+  leaves the profile unchanged and converts the flow to manual `SasConnectionString` entry.
 
 ## LiveConnection
 

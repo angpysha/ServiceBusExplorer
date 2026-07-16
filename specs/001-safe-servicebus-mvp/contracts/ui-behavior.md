@@ -18,17 +18,38 @@
 ## Connection Experience
 
 1. User selects **SAS** or **Microsoft Entra ID** before connecting.
-2. SAS requests current-attempt credentials and clearly states they will not be saved.
+2. SAS requests current-attempt credentials. **Save SAS in this device's credential vault** is
+   off by default, requires explicit selection, names the platform store, and states that no
+   plaintext or application-managed credential file is created.
 3. Entra offers **Use existing developer/environment identity** and **Interactive browser** plus
    an optional tenant/directory identifier.
 4. Scope is explicit: **Namespace** or **Entity**. Entity requires entity kind/path and hides or
    disables namespace-only loading options.
-5. Successful connection may save only the approved profile fields.
-6. Reconnect from profile requests SAS again or reacquires Entra authorization.
-7. History supports add/edit/remove and remains usable when one stored record is corrupt.
+5. After a successful opted-in SAS connection, vault-save success permits the profile to store only
+   an opaque reference. Vault-save failure reports that the connection succeeded but reconnect was
+   not saved.
+6. Reconnect resolves a saved SAS reference when available. Unavailable, locked, denied, missing
+   provider, unsupported, or missing credential states preserve the profile and prompt for SAS.
+7. Manual SAS entry after vault failure does not replace the saved credential unless the user
+   explicitly chooses **Replace saved SAS**.
+8. Reconnect for Entra reacquires authorization; this feature never offers to save an Entra token.
+9. History supports add/edit/remove and remains usable when one stored record is corrupt.
+10. Removing a profile with a reference explicitly asks whether to remove the native-vault item.
+    Vault cleanup and profile removal outcomes are reported separately.
 
 The connect command is disabled until required non-secret and transient inputs for the chosen mode
 are present. Switching auth mode clears credential-only inputs from the previous mode.
+
+Vault errors use safe, actionable copy:
+
+- unavailable/locked: unlock or retry, or enter SAS for this connection;
+- permission denied: review OS vault permission or enter SAS;
+- provider missing/unsupported: install or enable a compatible Linux Secret Service where
+  applicable, or enter SAS;
+- credential not found: enter SAS and optionally replace the saved credential;
+- cleanup failed: retry cleanup, keep the profile, or explicitly remove metadata only.
+
+No error text contains the credential, a raw native exception, or a credential-derived label.
 
 ## Message Source Selection
 

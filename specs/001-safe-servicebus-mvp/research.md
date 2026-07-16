@@ -60,14 +60,16 @@ should be long-lived. One owner prevents mismatched credentials, scope, and disp
 ### R3. SAS and Entra Credential Selection
 
 **Decision**:
-- SAS uses an in-memory connection string supplied for the current connection only.
+- SAS uses an in-memory connection string supplied for the current connection. Optional persistence
+  is a separate, explicit, default-off native-vault operation after a successful connection.
 - Entra offers `DefaultAzureCredential` for pre-established developer/environment identity and
   `InteractiveBrowserCredential` as an explicit interactive option.
 - Optional tenant ID configures the selected identity credential.
 - Interactive browser uses an application-owned public-client registration/client ID and local
   redirect URI; the client ID is configuration, not a secret. The UI warns that operations run
   with the signed-in identity's granted permissions.
-- The profile records only authentication family and interaction preference.
+- The profile records only authentication family, interaction preference, and for opted-in SAS an
+  opaque random credential reference; it never records the secret.
 
 **Rationale**: Azure Service Bus supports client construction with either connection strings or
 fully qualified namespace plus `TokenCredential`. Explicit interactive selection avoids an
@@ -81,7 +83,8 @@ application.
   authenticated.
 - `DefaultAzureCredential` only: rejected because failure can be opaque and an evaluator needs an
   intentional interactive path.
-- Persist encrypted SAS secrets: rejected by approved MVP scope.
+- Persist SAS in plaintext or an application-managed encrypted file: rejected. Native per-user
+  vault persistence is the only approved optional persistence.
 
 ### R4. Explicit Message Source with No Sentinel Default
 
@@ -127,20 +130,41 @@ dialog without a `Window` dependency. Typed data allows deterministic tests and 
 - Unbounded list/load: rejected by the specification.
 - Application-level retry of entire batches: rejected because it can duplicate destructive work.
 
-### R7. Secret-Free Versioned Profile Storage
+### R7. Secret-Free Versioned Profile and Native Credential Vault
 
-**Decision**: Persist a versioned profile envelope under the current OS-user application data
-location. Allowlisted fields are serialized; credentials and message content have no serializable
-members. On upgrade, detect existing raw-string history, do not deserialize it into profiles, and
-offer to remove it or derive only namespace/entity metadata in memory after explicit review.
+**Decision**:
 
-**Rationale**: Allowlisting prevents accidental secret persistence. Corrupt history must not block
-new connections.
+- Persist a versioned profile envelope under the current OS-user application data location.
+  Allowlisted fields include at most one CSPRNG-generated opaque credential reference.
+- Core exposes asynchronous `ICredentialVault` store/retrieve/delete operations plus typed
+  `Available`, `Unavailable`, `Locked`, `PermissionDenied`, `ProviderMissing`, `Unsupported`,
+  `NotFound`, and `Failure` outcomes.
+- App/infrastructure maps that port to Windows Credential Manager, macOS Keychain Services, or
+  Linux freedesktop Secret Service through libsecret or a compatible provider.
+- No native type, handle, exception, or platform package leaks into Core or ViewModels.
+- Vault retrieval failure keeps the profile/reference and prompts for SAS. It never falls back to
+  plaintext, app-managed encrypted files, or an in-memory production persistence substitute.
+- Saving is off by default. An explicit save creates a random reference only after the vault write
+  succeeds. Replacing a saved SAS explicitly upserts the existing reference; a failed or uncertain
+  native result keeps the profile/reference and does not claim which value is stored. Profile
+  deletion separately asks whether to delete the vault item and reports profile/vault outcomes.
+- Microsoft Entra access tokens are outside this vault contract and are never stored by this
+  feature.
+- On upgrade, detect existing raw-string history, do not deserialize it into profiles, and offer to
+  remove it or derive only namespace/entity metadata in memory after explicit review.
+
+**Rationale**: Allowlisting prevents accidental secret persistence, while the OS account’s native
+vault supplies access control and lifecycle. Typed failures preserve a useful profile without
+misrepresenting reconnect readiness.
 
 **Alternatives considered**:
 - Continue storing strings after redaction: rejected because redaction is fragile.
 - Automatically migrate raw strings: rejected because parsing/writing can create another secret
   copy and silently retain unintended metadata.
+- Application-managed encryption/DPAPI files: rejected because the approved requirement permits
+  only named native vaults and no file fallback.
+- Delete the profile when vault lookup fails: rejected because unavailability and credential
+  deletion are independent from non-secret profile validity.
 
 ### R8. Testing Boundaries
 
@@ -180,6 +204,44 @@ Hubs, generators, and monitoring features from this preview. There are no visibl
 **Rationale**: Honest absence matches the approved scope. The separate WinForms application
 remains the fallback.
 
+### R11. Build-versus-Package Decision for Native Vault Adapters
+
+**Decision**: Keep `ICredentialVault` package-neutral. No package is approved in Phase 5.
+`ktsu.CredentialCache` 1.2.3 is rejected as an implementation candidate for this requirement.
+Implementing thin native adapters and evaluating a different/newer library remain alternatives for
+the connection-safety slice.
+
+**Evidence and risk review**:
+
+- License: the v1.2.3 repository tag is MIT, acceptable in principle with attribution.
+- Framework: NuGet lists net8.0/net9.0 package targets; net10.0 is computed compatibility, not an
+  included net10 target.
+- Behavior: v1.2.3 README documents `PersistToStorage`, `StoragePath = "credentials.dat"`, and
+  application-managed encryption. It does not document Windows Credential Manager, Keychain
+  Services, or Secret Service adapters.
+- Provenance/maintenance: v1.2.3 was published 2025-05-04; NuGet showed 1,186 downloads at review
+  time and no popular GitHub repository usage. It depends on the same publisher's
+  `ktsu.AppDataStorage`, `ktsu.StrongPaths`, and `ktsu.StrongStrings`. Native keyring work appeared
+  later and has since undergone breaking API changes, indicating an active but recent surface.
+- Native/supply chain: newer code P/Invokes `advapi32`, `Security.framework`, and
+  `libsecret-1.so.0`; Linux additionally needs a running D-Bus Secret Service. Default/in-memory
+  fallback behavior must be disabled or bypassed in production.
+- Smoke requirement: any candidate must prove store/retrieve/replace/delete, process restart,
+  locked/denied/missing/provider-absent behavior, package launch, and no file creation on all
+  supported RIDs before adoption.
+
+**Alternatives considered**:
+
+- Thin first-party adapters: best control over fallback and result mapping, but increases native
+  interop, memory handling, and platform test burden.
+- A newer `ktsu.CredentialCache`: potentially reduces code, but remains a candidate only after
+  pinned-version source/license/dependency review and smoke tests; 1.2.3 evidence cannot justify it.
+- Another maintained keyring package: acceptable only under the same review gate.
+
+**Package decision status**: `NO PACKAGE SELECTED — 1.2.3 REJECTED; ADAPTER SPIKE REQUIRED`.
+This does not block T001 because credential vault work remains in the later connection-safety
+slice.
+
 ## Clarification Resolution
 
 | Planning question | Resolution |
@@ -190,6 +252,9 @@ remains the fallback.
 | Bounded retrieval | 100 items by default, cancellable, continuation/refresh visible |
 | Confirmation interaction | Typed async confirmation port; Avalonia modal implementation |
 | Test architecture | Fake-backed .NET 10 tests; live Azure tests isolated and opt-in |
+| Optional SAS storage | Default-off native vault through async `ICredentialVault`; opaque reference only |
+| Vault failure | Typed outcome, preserve profile/reference, prompt for SAS, no file fallback |
+| Credential package | No selection; `ktsu.CredentialCache` 1.2.3 rejected; adapter spike required |
 
 No `NEEDS CLARIFICATION` item remains.
 
@@ -203,3 +268,13 @@ No `NEEDS CLARIFICATION` item remains.
   <https://learn.microsoft.com/dotnet/api/overview/azure/identity-readme>
 - Avalonia documentation, dialog services and desktop application lifetime:
   <https://docs.avaloniaui.net/docs/how-to/dialogs-how-to>
+- Microsoft Win32 Credential Management API:
+  <https://learn.microsoft.com/windows/win32/api/wincred/>
+- Apple Keychain Services items and generic passwords:
+  <https://developer.apple.com/documentation/security/keychain-items>
+- freedesktop Secret Service specification:
+  <https://specifications.freedesktop.org/secret-service/latest/>
+- libsecret asynchronous store/lookup/clear API:
+  <https://gnome.pages.gitlab.gnome.org/libsecret/libsecret-simple-api.html>
+- `ktsu.CredentialCache` v1.2.3 release, README, and MIT license:
+  <https://github.com/ktsu-dev/CredentialCache/releases/tag/v1.2.3>

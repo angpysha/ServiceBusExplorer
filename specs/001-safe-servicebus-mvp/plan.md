@@ -11,8 +11,10 @@ removing or restructuring the WinForms product. Preserve the current Core/ViewMo
 projects, replace ambiguous message sub-queue defaults with an explicit `MessageSource`, add a
 framework-neutral confirmation port, and route every connection through one connection-context
 factory that honors SAS or `TokenCredential`, scope, tenant, loading options, capabilities, and
-lifetime. The first implementation slice is deliberately limited to the destructive dead-letter
-routing defect, regression tests, and confirmation wiring.
+lifetime. Optional SAS persistence is mediated by a framework-neutral asynchronous
+`ICredentialVault` and native per-user stores; it is disabled by default and settings contain only
+an opaque random reference. The first implementation slice remains deliberately limited to the
+destructive dead-letter routing defect, regression tests, and confirmation wiring.
 
 ## Technical Context
 
@@ -21,8 +23,9 @@ routing defect, regression tests, and confirmation wiring.
 **Primary Dependencies**: Avalonia 11, ReactiveUI, `Azure.Messaging.ServiceBus`,
 `Azure.Identity`, Microsoft.Extensions.DependencyInjection, Microsoft.Extensions.Logging
 
-**Storage**: Local per-user JSON for versioned, secret-free connection profiles and display
-preferences only; Azure Service Bus remains the system of record
+**Storage**: Local per-user JSON for versioned, secret-free connection profiles, display
+preferences, and an optional opaque random credential reference; optional SAS secrets reside only
+in Windows Credential Manager, macOS Keychain Services, or Linux Secret Service/libsecret
 
 **Testing**: New .NET 10 xUnit test project(s) with hand-written fakes around application ports;
 separate opt-in live Azure acceptance tests
@@ -37,9 +40,11 @@ application
 entity/message retrieval is bounded to 100 items per request by default; cancellation is observed
 at each Azure call and between batch items
 
-**Constraints**: No secret or message content in history or routine logs; no sync-over-async;
-source-specific destructive actions require an explicit source and confirmation; no production
-code for excluded Azure services; no invented network API; WinForms remains buildable
+**Constraints**: SAS saving is opt-in and off by default; no plaintext or application-managed
+encrypted-file fallback; Entra access tokens are not stored by this feature; no secret or message
+content in history or routine logs; no sync-over-async; source-specific destructive actions require
+an explicit source and confirmation; no production code for excluded Azure services; no invented
+network API; WinForms remains buildable
 
 **Scale/Scope**: One interactive operator, one live connection context at a time, namespace or
 single-entity scope, queues/topics/subscriptions/rules, and bounded message batches
@@ -54,8 +59,8 @@ single-entity scope, queues/topics/subscriptions/rules, and bounded message batc
 |---|---|---|
 | I. Avalonia is the product UI | PASS | All new behavior targets `src/App`; WinForms is retained, not extended into new architecture. |
 | II. Preserve layer boundaries | PASS | Core owns models/ports, ViewModels own presentation state, Services own Azure adapters, App owns dialogs/composition/persistence. |
-| III. Secure modern Azure integration | PASS | Only modern Service Bus and Azure Identity APIs are used; profiles exclude credentials and content. |
-| IV. Tests define completion | PASS | Safety fixes lead with regression tests; unit, contract, UI/accessibility, live Azure, and package smoke layers are defined. |
+| III. Secure modern Azure integration | PASS | Profiles exclude secrets; optional SAS storage is native-vault-only and Entra tokens are excluded. |
+| IV. Tests define completion | PASS | Safety fixes lead with regression tests; vault lifecycle, unit, contract, UI/accessibility, live Azure, and package smoke layers are defined. |
 | V. Async, observable, resilient | PASS | All ports accept cancellation; typed outcomes distinguish cancellation, stale state, partial success, and failure. |
 | Technical/security constraints | PASS | .NET 10/Avalonia 11/ReactiveUI retained; no unsupported package is required. |
 | Workflow/governance | PASS | Existing code was inspected through the project codesearch index and alternatives/migration impact are recorded. |
@@ -85,7 +90,18 @@ No constitutional exception or unresolved `NEEDS CLARIFICATION` remains.
    validation, authentication, authorization, conflict, throttled, unavailable, cancelled, stale,
    partial, and unknown. Inputs, tokens, connection strings, message bodies, and properties are not
    logged.
-7. **Preview packaging**: self-contained RID artifacts are `win-x64.zip`, `osx-x64.zip`,
+7. **Native credential vault**: Core defines async `ICredentialVault` store/retrieve/delete
+   operations and typed availability/failure outcomes. App/infrastructure supplies an explicit
+   Windows Credential Manager, macOS Keychain Services, or Linux Secret Service/libsecret adapter.
+   A CSPRNG-generated opaque reference is the only vault-related profile field. Missing, locked,
+   denied, unavailable, provider-missing, or unsupported vault states preserve the profile and
+   request SAS again. Replacement and optional cleanup on profile deletion are explicit workflows.
+8. **Credential package status**: no third-party package is selected. `ktsu.CredentialCache`
+   1.2.3 is rejected because its published API documents app-managed file persistence and predates
+   the native-store rewrite. Native adapters and a separately reviewed newer library remain
+   alternatives behind `ICredentialVault`; any package requires license, maintenance, native-code,
+   supply-chain, fallback, and three-platform smoke approval.
+9. **Preview packaging**: self-contained RID artifacts are `win-x64.zip`, `osx-x64.zip`,
    `osx-arm64.zip`, and `linux-x64.tar.gz`. Development previews may be unsigned but must say so.
 
 Detailed rationale is in [research.md](research.md), models in
@@ -118,7 +134,7 @@ src/
 ├── Core/                 # Framework-neutral records, state machines, and ports
 ├── ViewModels/           # ReactiveUI presentation state and commands
 ├── Services/             # Azure Service Bus adapters and client/context factory
-├── App/                  # Avalonia views, composition, dialogs, settings
+├── App/                  # Avalonia views, composition, dialogs, settings, native vault adapters
 ├── ServiceBus/           # Existing modern SDK helpers reused where contracts align
 ├── ServiceBusExplorer/   # Legacy WinForms application retained during preview
 └── ServiceBusExplorer.Tests/ # Existing legacy net472 tests
@@ -140,7 +156,8 @@ suite so .NET 10 contracts and Avalonia behavior can run cross-platform.
    parameters, add fake-backed queue/subscription routing tests, and wire typed confirmation for
    purge. Do not refactor unrelated entity screens.
 2. **Connection safety slice**: separate `ConnectionProfile` from transient credentials, migrate
-   raw history defensively, add the connection-context factory, and honor auth/scope/capabilities.
+   raw history defensively, add the connection-context factory and `ICredentialVault`, approve a
+   native adapter implementation, and honor auth/scope/capabilities. This does not alter T001.
 3. **Core administration and messaging**: fill entity/rule lifecycle, send/receive/settlement,
    typed outcomes, bounded retrieval, and stale-state handling.
 4. **Sessions and selected recovery**: ownership state machine, deferred lookup, send-before-settle
@@ -156,13 +173,14 @@ Each slice ends at a human review checkpoint; tasks are produced later by `/spec
 |---|---|
 | Design preserves approved scope and keeps WinForms available | PASS |
 | New UI behavior is Avalonia with business behavior outside views | PASS |
-| Azure SDK and identity choices are modern and secret-safe | PASS |
+| Azure SDK, identity, and optional native-vault choices are secret-safe | PASS |
 | Async/cancellation, retry boundaries, bounded retrieval, and diagnostics are explicit | PASS |
-| Safety, contract, accessibility, live Azure, and package verification trace to acceptance criteria | PASS |
+| Safety, vault lifecycle, contract, accessibility, live Azure, and package verification trace to acceptance criteria | PASS |
 | Alternatives, migration impact, exclusions, and the first implementation slice are explicit | PASS |
 
 **Final design gate assessment**: PASS, subject to mandatory human review. No complexity waiver is
-requested.
+requested. Package selection is intentionally gated rather than unresolved architecture: no
+credential package may enter implementation until its review passes.
 
 ## Complexity Tracking
 

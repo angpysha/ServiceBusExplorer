@@ -40,3 +40,13 @@ technology, and cross-platform preview requirement quality
 - [ ] CHK021 Are supported OS floors and package formats recorded as reviewable planning decisions rather than left implicit? [Dependency, Spec §Assumptions]
 - [ ] CHK022 Is legacy Windows fallback wording required to distinguish coexistence from automatic replacement or migration? [Consistency, Spec §FR-002; SC-012]
 - [ ] CHK023 Are accessibility acceptance requirements defined on each supported OS with named assistive-technology evidence expectations? [Coverage, Spec §User Story 5; SC-008–SC-009]
+
+## Native Vault Experience
+
+- [ ] CHK024 Is the SAS-save control required to start off for every new or edited profile and to name the current platform vault? [Clarity, Spec §User Story 1; FR-006]
+- [ ] CHK025 Are successful connection and failed credential persistence represented as separate outcomes so the UI cannot claim reconnect was saved? [State Clarity, Spec §Edge Cases; FR-007]
+- [ ] CHK026 Are unavailable, locked, denied, provider-missing, unsupported, and missing-credential states given distinct actionable recovery copy that preserves the profile? [Coverage, Spec §User Story 1 AC-6; FR-007]
+- [ ] CHK027 Is manual SAS use after retrieval failure distinguished from explicit replacement of the saved credential? [Interaction Clarity, Spec §User Story 1 AC-7; FR-007]
+- [ ] CHK028 Does profile removal require a separate, understandable choice for native-vault cleanup and explain partial failure? [Completeness, Spec §User Story 1 AC-8; FR-007]
+- [ ] CHK029 Are vault prompts, permissions, errors, and cleanup choices keyboard-operable and exposed with meaningful assistive-technology semantics? [Accessibility, Spec §FR-031–FR-032, FR-035]
+- [ ] CHK030 Is Entra wording consistent that no access token is saved by this feature and no SAS-save control applies to Entra profiles? [Consistency, Spec §User Story 1 AC-9; FR-006]

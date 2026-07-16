@@ -8,12 +8,12 @@ quality
 
 ## Credential and Data Protection
 
-- [ ] CHK001 Are persisted profile fields exhaustively allowlisted and secret fields explicitly prohibited? [Completeness, Spec §FR-005–FR-006]
-- [ ] CHK002 Are failed, cancelled, corrupt-history, crash, and support-diagnostic paths covered by the same non-persistence rule? [Coverage, Spec §FR-006; Edge Cases]
+- [ ] CHK001 Are persisted profile and settings fields exhaustively allowlisted, including the optional opaque random credential reference, with all credential-derived data explicitly prohibited? [Completeness, Spec §FR-005–FR-006]
+- [ ] CHK002 Are failed, cancelled, corrupt-history, unavailable-vault, locked-vault, denied-vault, deleted-credential, crash, and support-diagnostic paths covered by the same no-secret-outside-vault rule? [Coverage, Spec §FR-006–FR-007; Edge Cases]
 - [ ] CHK003 Is “routine diagnostics” bounded clearly enough to prohibit raw SDK exception data that may echo inputs? [Clarity, Spec §FR-008]
-- [ ] CHK004 Are SAS and Entra reconnect requirements distinct and measurable without implying token persistence? [Clarity, Spec §FR-003, FR-007]
+- [ ] CHK004 Are SAS and Entra reconnect requirements distinct and measurable, with optional SAS vault retrieval separated from mandatory non-persistence of Entra access tokens? [Clarity, Spec §FR-003, FR-006–FR-007]
 - [ ] CHK005 Are tenant, namespace, entity scope, and loading-option requirements consistent across profile, connect, and capability behavior? [Consistency, Spec §FR-003–FR-005]
-- [ ] CHK006 Does the specification define safe handling of pre-existing raw connection history rather than only new records? [Gap, Spec §Explicitly Excluded]
+- [ ] CHK006 Does the specification keep automatic migration of pre-existing raw connection history out of scope without permitting legacy plaintext to become a vault or profile fallback? [Boundary, Spec §Explicitly Excluded; FR-006]
 
 ## Source Routing and Destructive Actions
 
@@ -41,3 +41,18 @@ quality
 - [ ] CHK022 Are retry requirements bounded for destructive operations after an uncertain outcome? [Gap, Spec §FR-028–FR-030]
 - [ ] CHK023 Are application-close requirements complete for in-flight operations whose outcomes may be uncertain? [Recovery, Spec §Edge Cases]
 - [ ] CHK024 Can SC-002, SC-003, SC-004, and SC-007 be verified without exposing real credentials or message content in evidence? [Acceptance Criteria, Spec §Success Criteria]
+
+## Native Vault Amendment
+
+- [ ] CHK025 Is SAS saving explicitly opt-in and disabled by default for every new or edited profile, without inferring consent from another profile? [Safety Default, Spec §User Story 1; FR-006; Assumptions]
+- [ ] CHK026 Are the only permitted persistence destinations mapped completely to Windows Credential Manager, macOS Keychain Services, and Linux freedesktop Secret Service via libsecret or a compatible provider? [Completeness, Spec §FR-006]
+- [ ] CHK027 Does the specification prohibit both plaintext and application-managed encrypted-file fallback when the native vault is unavailable, locked, denied, unsupported, or missing the referenced entry? [Fallback Safety, Spec §FR-006–FR-007; Edge Cases]
+- [ ] CHK028 Are save, update, reconnect, profile removal, optional vault-entry deletion, and differing partial outcomes defined across the full saved-credential lifecycle? [Lifecycle Coverage, Spec §User Story 1; FR-007; SC-013]
+- [ ] CHK029 Is the credential reference required to be opaque, random, non-secret, non-derived from SAS data, and useless outside the native vault authorization boundary? [Reference Safety, Spec §FR-005; Key Entities; Assumptions]
+- [ ] CHK030 Do acceptance outcomes verify that a missing or inaccessible vault entry preserves the non-secret profile and prompts for SAS again? [Recovery, Spec §User Story 1; FR-007; SC-013]
+- [ ] CHK031 Can platform vault acceptance evidence prove correct storage location and lifecycle behavior without printing or otherwise exposing the real SAS connection string? [Test Safety, Spec §FR-035; SC-002; SC-013]
+- [ ] CHK032 Are vault availability and failure categories complete enough to distinguish unavailable, locked, denied, provider-missing, unsupported, missing-item, cancelled, and unknown failure? [Clarity, Spec §FR-007; Edge Cases]
+- [ ] CHK033 Are replacement ordering and failure semantics explicit about preserving the prior credential/reference unless replacement succeeds? [Lifecycle Safety, Spec §User Story 1 AC-7; FR-007]
+- [ ] CHK034 Are profile deletion and optional vault cleanup specified as separate user choices with recoverable partial outcomes? [Completeness, Spec §User Story 1 AC-8; FR-007]
+- [ ] CHK035 Does package-selection guidance require license, maintenance, native-code, transitive dependency, fallback, supply-chain, and packaged cross-platform smoke review before adoption? [Dependency Risk, Constitution §Technical Constraints]
+- [ ] CHK036 Is any in-memory vault limited explicitly to tests and prohibited from production composition as a persistence fallback? [Fallback Safety, Spec §FR-006–FR-007]

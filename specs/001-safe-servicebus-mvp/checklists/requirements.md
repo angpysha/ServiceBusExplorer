@@ -31,7 +31,8 @@
 
 ## Notes
 
-- Validation result: 16/16 checks pass after one review iteration.
+- Validation result: 16/16 checks pass after revalidation on 2026-07-17.
 - The named product domain, authentication families, operating systems, and legacy coexistence are feature constraints, not implementation prescriptions.
-- No formal clarification questions were required because the requested scope, safety defaults, exclusions, and audit findings resolve the material business choices.
+- The approved native-vault SAS persistence amendment is integrated into user scenarios, requirements, entities, edge cases, scope decisions, measurable outcomes, assumptions, and dependencies without unresolved ambiguity.
+- Native credential-vault names and platform mapping are approved product security constraints, not unselected implementation details.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.

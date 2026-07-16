@@ -21,6 +21,8 @@ Normative keywords MUST, MUST NOT, SHOULD, and MAY have their usual requirement 
 6. MUST omit namespace administration services for entity-scoped connections.
 7. MUST classify validation, authentication, authorization, cancellation, throttling, and service
    availability failures without exposing raw secrets.
+8. For a profile with a credential reference, MUST retrieve through `ICredentialVault`; any
+   non-success result preserves the profile/reference and requests transient SAS input.
 
 ### `IConnectionProfileStore`
 
@@ -30,6 +32,58 @@ Normative keywords MUST, MUST NOT, SHOULD, and MAY have their usual requirement 
   connection.
 - Existing raw-string history MUST NOT be rewritten or echoed. Migration requires explicit user
   review and retains only approved metadata.
+- The only credential-related serialized value is an optional opaque random reference. New
+  references MUST be CSPRNG-generated and contain no credential-derived or profile-derived data.
+
+### `ICredentialVault`
+
+Framework-neutral asynchronous port owned by Core and implemented only behind the
+App/infrastructure boundary:
+
+- `GetAvailabilityAsync(CancellationToken)` returns a typed availability result.
+- `StoreAsync(CredentialReference reference, SensitiveCredential credential, CancellationToken)`
+  creates or explicitly replaces the referenced SAS secret.
+- `RetrieveAsync(CredentialReference reference, CancellationToken)` returns a typed result and a
+  transient non-serializable `SensitiveCredential` only on success.
+- `DeleteAsync(CredentialReference reference, CancellationToken)` deletes only the referenced item.
+
+All operations MUST distinguish `Available`, `Unavailable`, `Locked`, `PermissionDenied`,
+`ProviderMissing`, `Unsupported`, `NotFound`, `Cancelled`, and `Failure` where applicable. Results
+MUST also permit `Uncertain` when a native mutation outcome cannot be proven. Results contain safe
+category/recovery information only, never native handles, native API types, raw native exceptions,
+secret values, or secret-derived identifiers.
+
+Implementation contract:
+
+- Windows uses current-user Windows Credential Manager generic credentials.
+- macOS uses the current user's Keychain Services generic-password item.
+- Linux uses the current user's freedesktop Secret Service through libsecret or a compatible
+  provider and MUST report provider absence rather than falling back.
+- Production composition MUST NOT register an in-memory, plaintext, DPAPI/file, encrypted-file, or
+  other application-managed persistence fallback.
+- Core and ViewModels MUST NOT reference P/Invoke, COM, D-Bus, GLib, Security.framework,
+  platform-specific packages, or third-party vault APIs.
+- Microsoft Entra access/refresh tokens MUST NOT be passed to this port.
+
+Lifecycle and ordering contract:
+
+1. The save toggle starts false for every new profile and is never inherited.
+2. After a successful SAS connection, explicit save generates a random reference, stores the secret,
+   and only then persists the reference.
+3. Store failure leaves the profile without a new reference and reports “connected, reconnect not
+   saved.”
+4. Explicit replacement upserts the existing reference. Failure/uncertainty keeps the profile
+   reference and MUST NOT claim replacement or claim that the previous value remains; retry/manual
+   entry remains available.
+5. Profile deletion asks separately whether to delete the referenced vault item.
+6. If cleanup was requested, vault deletion is attempted first. Failure retains the profile and
+   reference for retry unless the user explicitly chooses metadata-only deletion after warning.
+7. Retrieval `NotFound` or any unavailable/locked/denied/provider failure leaves the profile and
+   reference unchanged and prompts for SAS.
+
+Package implementations remain subordinate to this contract. No package may be adopted until
+license, maintenance, transitive dependency, native interop, fallback, supply-chain, and packaged
+three-platform smoke review passes.
 
 ## Message Operation Contracts
 
@@ -123,3 +177,10 @@ Fake-backed contract tests MUST prove:
 6. SAS and each Entra selection create the expected client path and honor tenant/scope;
 7. context disposal disposes clients once after in-flight work is cancelled or completed;
 8. partial recovery does not repeat confirmed successes.
+9. SAS saving defaults off and no vault call occurs without explicit opt-in;
+10. profile JSON contains only an opaque reference after successful vault store;
+11. all vault failure classes preserve the profile/reference and prompt for SAS;
+12. replacement and cleanup failures/uncertainty preserve the profile/reference and never claim an
+    unproven stored/deleted state;
+13. native adapters use only the designated platform store and create no fallback file;
+14. Entra token paths never invoke `ICredentialVault`.

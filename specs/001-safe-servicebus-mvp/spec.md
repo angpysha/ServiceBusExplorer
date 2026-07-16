@@ -4,27 +4,37 @@
 
 **Created**: 2026-07-16
 
-**Status**: Draft — ready for planning review
+**Status**: Approved requirements — amended 2026-07-17 for optional native-vault SAS persistence
 
 **Input**: Deliver a minimum working cross-platform Service Bus Explorer centered on safe Azure Service Bus administration and message recovery while retaining the legacy application during preview.
+
+## Clarifications
+
+### Session 2026-07-17
+
+- Q: May users persist a full SAS connection string for reconnect? → A: Yes, only through an explicit option that is disabled by default and stores the string in the operating system's native credential vault; history retains only an opaque random reference, and Microsoft Entra access tokens are never persisted.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Connect Safely and Browse a Namespace (Priority: P1)
 
-As a developer or operator, I can connect to an Azure Service Bus namespace using either a shared access signature (SAS) or Microsoft Entra ID, reconnect from secret-free history, and browse the resources I am allowed to see without exposing credentials.
+As a developer or operator, I can connect to an Azure Service Bus namespace using either a shared access signature (SAS) or Microsoft Entra ID, optionally save a SAS connection string in my operating system's native credential vault, reconnect from non-secret history, and browse the resources I am allowed to see without exposing credentials.
 
-**Why this priority**: Every useful workflow depends on a trustworthy connection. Preventing credential persistence is a release-blocking safety requirement.
+**Why this priority**: Every useful workflow depends on a trustworthy connection. Preventing plaintext, unintended, or application-managed credential persistence is a release-blocking safety requirement.
 
-**Independent Test**: Connect once with each supported authentication method, close and reopen the application, verify that only non-secret identifying information remains, reconnect after supplying or acquiring credentials again, and browse available entities.
+**Independent Test**: Connect once with each supported authentication method; verify that SAS saving is off by default; opt in to save one valid SAS connection string; close and reopen the application; verify that history contains only non-secret metadata and an opaque reference; reconnect through the native vault; then make the vault unavailable and verify that the profile remains while the application requests the SAS string again.
 
 **Acceptance Scenarios**:
 
-1. **Given** valid SAS connection details, **When** the user connects, **Then** the namespace is opened and the credential is usable only for the current connection.
+1. **Given** valid SAS connection details and the save option left at its default, **When** the user connects, **Then** the namespace is opened and the SAS connection string is not persisted.
 2. **Given** a Microsoft Entra identity with access, **When** the user connects and completes any required sign-in, **Then** the namespace is opened without requesting a SAS secret.
-3. **Given** a successful prior connection, **When** the user views connection history after restarting, **Then** the entry identifies the namespace and authentication mode but contains no SAS key, connection string, access token, or message content.
+3. **Given** a user explicitly enables SAS saving, **When** the connection succeeds, **Then** the full SAS connection string is stored only in the platform-native credential vault and history stores only non-secret profile metadata plus an opaque random credential reference.
 4. **Given** invalid, expired, unauthorized, or cancelled authentication, **When** connection fails, **Then** the user receives an actionable, secret-safe explanation and can retry, edit the connection, or cancel.
 5. **Given** a connection limited to one entity, **When** it opens, **Then** the application honors that scope and does not imply access to the whole namespace.
+6. **Given** a profile that references a saved SAS credential, **When** its native vault is unavailable, locked, denied, or no longer contains that credential, **Then** the non-secret profile remains and the user is prompted to enter the SAS connection string again without any plaintext or application-managed file fallback.
+7. **Given** a saved SAS credential, **When** the user updates it, **Then** subsequent reconnect uses the updated vault value and history still contains no SAS secret.
+8. **Given** a profile with a saved SAS credential, **When** the user removes the profile, **Then** the user is explicitly offered deletion of the corresponding native-vault entry.
+9. **Given** any Microsoft Entra sign-in outcome, **When** the connection ends or the application restarts, **Then** no Microsoft Entra access token has been persisted by this feature.
 
 ---
 
@@ -104,6 +114,12 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 
 - Empty, malformed, partially redacted, expired, revoked, or wrong-namespace SAS details are rejected without being persisted or echoed.
 - Microsoft Entra sign-in may be cancelled, time out, require additional policy interaction, or succeed for an identity lacking data or administration permissions.
+- Native credential storage is explicit and disabled by default; dismissing or declining the option leaves the SAS connection string available only to the current connection.
+- The native credential vault may be unavailable, locked, denied, unsupported, or later cleared; the non-secret profile remains usable for manual credential entry and no plaintext or application-managed encrypted-file fallback is created.
+- An opaque credential reference may be missing, malformed, duplicated through profile copying, or point to a deleted vault entry; it is never treated as a credential and failed resolution prompts for SAS again.
+- Updating a saved SAS credential may fail after connection succeeds; the application reports that reconnect is not saved rather than claiming persistence.
+- Profile removal and vault-entry removal may have different outcomes; the user chooses whether to delete the vault entry and receives the outcome without exposing the credential.
+- A profile copied to another operating-system account or device does not carry its native-vault credential and therefore prompts for SAS.
 - Namespace-wide browsing may be unavailable for an entity-scoped connection; unavailable operations remain disabled or explain the required scope.
 - A connection may drop or credentials may expire during a long operation; completed work is distinguished from work that can be retried.
 - An entity can be deleted, disabled, renamed externally, or changed between display and action; stale details must not be presented as confirmed success.
@@ -137,9 +153,9 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **FR-002**: The product MUST keep the legacy Windows application available as a separate fallback throughout the MVP preview.
 - **FR-003**: Users MUST be able to connect using SAS credentials or Microsoft Entra ID, and the selected authentication mode and optional organizational directory MUST be honored.
 - **FR-004**: Connection inputs MUST distinguish namespace-wide and entity-scoped access, honor the supplied scope, and apply the user's selected entity-loading options.
-- **FR-005**: The product MUST retain only non-secret connection history, limited to a user label, namespace endpoint, authentication mode, optional organizational directory identifier, optional entity scope, and non-sensitive display preferences.
-- **FR-006**: SAS keys, complete SAS connection strings, access tokens, message bodies, and message properties MUST NOT be persisted in connection history or included in routine diagnostics.
-- **FR-007**: Users MUST be able to add, edit, reconnect from, and remove history entries; reconnecting MUST reacquire identity authorization or require SAS credentials again.
+- **FR-005**: Application settings and connection-history JSON MUST retain only non-secret profile data: a user label, namespace endpoint, authentication mode, optional organizational directory identifier, optional entity scope, non-sensitive display preferences, and, when SAS saving is enabled, an opaque random credential reference that contains no credential-derived data.
+- **FR-006**: Saving a full SAS connection string MUST be an explicit option disabled by default and MUST store it only in the current user's platform-native credential vault: Windows Credential Manager on Windows, Keychain Services on macOS, and a freedesktop Secret Service provider through libsecret or a compatible provider on Linux. The product MUST NOT persist SAS secrets in history, settings, logs, crash or support diagnostics, plaintext files, or application-managed encrypted files, and MUST never persist Microsoft Entra access tokens through this feature.
+- **FR-007**: Users MUST be able to add, edit, reconnect from, and remove profiles; save, update, or remove a profile's SAS credential in the native vault; and choose whether profile removal also deletes its referenced vault entry. Reconnect MUST use a referenced vault credential when available, reacquire Microsoft Entra authorization for Entra profiles, and prompt for SAS while retaining the profile when the vault or referenced credential is unavailable, locked, denied, or deleted.
 - **FR-008**: Connection and operation failures MUST provide an actionable category, affected operation, and retry or correction path without exposing secrets.
 - **FR-009**: Users MUST be able to browse and refresh the queues, topics, and subscriptions visible to their current connection and permissions.
 - **FR-010**: Users with sufficient permission MUST be able to view, create, update, and delete queues, topics, and subscriptions, subject to service-supported mutability and limits.
@@ -167,12 +183,13 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **FR-032**: Interactive controls, tables, trees, forms, message states, validation, progress, and confirmations MUST expose meaningful names, roles, values, and changes to assistive technology.
 - **FR-033**: Duration values MUST display and preserve days, hours, minutes, seconds, and millisecond precision across view and edit operations, without an arbitrary product-imposed day cap.
 - **FR-034**: Supported preview packages MUST identify operating system, architecture, version, preview status, installation or extraction steps, and known limitations.
-- **FR-035**: Automated verification MUST cover safety-critical source routing, destructive confirmations, credential non-persistence, authentication option handling, message settlement eligibility, session loss, recovery partial failure, accessibility semantics, and package launch checks.
+- **FR-035**: Automated verification MUST cover safety-critical source routing, destructive confirmations, default-disabled SAS saving, native-vault-only SAS persistence and lifecycle behavior on each platform, absence of secrets and access tokens from history and settings, authentication option handling, message settlement eligibility, session loss, recovery partial failure, accessibility semantics, and package launch checks.
 
 ### Key Entities
 
-- **Connection Profile**: A secret-free history entry containing a label, namespace endpoint, SAS or Microsoft Entra authentication mode, optional organizational directory identifier, optional entity scope, and non-sensitive view preferences.
-- **Live Connection**: The current authorized interaction with a namespace or entity, including granted scope, status, and cancellation state; credentials are not part of persisted history.
+- **Connection Profile**: A non-secret history entry containing a label, namespace endpoint, SAS or Microsoft Entra authentication mode, optional organizational directory identifier, optional entity scope, non-sensitive view preferences, and an optional opaque random credential reference.
+- **Saved SAS Credential**: A full SAS connection string stored only in the current user's native operating-system credential vault and addressable through an opaque random reference; it is never embedded in the profile.
+- **Live Connection**: The current authorized interaction with a namespace or entity, including granted scope, status, and cancellation state; credentials are not embedded in persisted history or settings.
 - **Messaging Entity**: A queue, topic, or subscription with identity, status, counts, routing relationships, and service-supported settings.
 - **Subscription Rule**: A named filter and optional action associated with a subscription, including whether it provides catch-all behavior.
 - **Message Source**: The explicitly selected active, dead-letter, or transfer dead-letter location from which messages are inspected or consumed.
@@ -188,7 +205,7 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 
 - Azure Service Bus queues, topics, subscriptions, and subscription rules.
 - SAS and Microsoft Entra ID connections, including entity-scoped connections.
-- Secret-free connection history and safe reconnect behavior.
+- Non-secret connection history, optional native-vault SAS saving, and safe reconnect behavior.
 - Send, peek, peek-lock receive, receive-and-delete, settlement, purge, sessions, deferred-message retrieval, and selected-message recovery.
 - Explicit active, dead-letter, and transfer dead-letter routing.
 - Automated safety, workflow, accessibility, and packaging verification.
@@ -208,7 +225,7 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 
 ### Functional Options Chosen and Rejected
 
-- **Connection history**: Chosen — persist non-secret metadata only and reacquire credentials on reconnect. Rejected — plaintext full connection strings; encrypted secret persistence in the MVP; no history at all.
+- **Connection history and SAS persistence**: Chosen — persist only non-secret profile metadata plus an optional opaque random reference; offer default-disabled SAS saving exclusively in Windows Credential Manager, macOS Keychain Services, or a Linux freedesktop Secret Service provider; use the vault value when available and otherwise prompt again while keeping the profile. Rejected — plaintext persistence; application-managed encrypted-file storage; fallback secret files when the vault is unavailable; mandatory or default-enabled saving; persisting Microsoft Entra access tokens; no history at all.
 - **Destructive action safety**: Chosen — explicit, target-specific confirmation for every destructive action. Rejected — confirmation only for large batches; undo after execution; implicit execution from toolbar context.
 - **Message source selection**: Chosen — active, dead-letter, and transfer dead-letter are explicit selections, with no fallback. Rejected — command labels that silently change a shared default; automatic fallback when a source is unavailable.
 - **Receive behavior**: Chosen — peek-lock is the normal receive path; receive-and-delete remains available behind explicit risk confirmation. Rejected — receive-and-delete as the default; excluding receive-and-delete entirely.
@@ -221,7 +238,7 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 ### Measurable Outcomes
 
 - **SC-001**: On each supported operating system, a first-time evaluator can install or extract the preview, launch it, and reach the connection screen in under 5 minutes using published instructions.
-- **SC-002**: In acceptance testing, 100% of connection-history records remain free of SAS keys, complete connection strings, access tokens, message bodies, and message properties after successful, failed, and cancelled connections.
+- **SC-002**: In acceptance testing, 100% of connection-history and settings records remain free of SAS keys, complete connection strings, Microsoft Entra access tokens, message bodies, and message properties after successful, failed, cancelled, saved, updated, missing-vault, and deleted-credential workflows; a saved SAS profile contains only an opaque random reference.
 - **SC-003**: In 100% of automated routing tests, peek, receive, purge, and recovery affect only the explicitly selected active, dead-letter, or transfer dead-letter source.
 - **SC-004**: In 100% of tested destructive workflows, no service-changing operation starts before target-specific confirmation; cancelling confirmation produces no change.
 - **SC-005**: Evaluators can complete connect, browse, send, peek-lock receive, and one settlement workflow in under 10 minutes after launch using either supported authentication family.
@@ -232,14 +249,19 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **SC-010**: Duration round-trip tests preserve millisecond precision and values greater than 365 days wherever the service accepts them.
 - **SC-011**: Automated safety and workflow checks pass on every supported change, and each operating-system package passes a launch smoke test before preview publication.
 - **SC-012**: During preview, the legacy Windows application remains buildable and separately launchable, and the preview documentation identifies excluded workflows and fallback guidance.
+- **SC-013**: On Windows, macOS, and Linux, 100% of SAS persistence acceptance tests verify that saving is disabled by default, explicit opt-in writes only to the designated native vault, update and removal affect the referenced vault entry as requested, and an unavailable or missing vault credential preserves the profile and prompts for SAS with no file fallback.
 
 ## Assumptions
 
 - Target users are developers and operators who already have access to an Azure Service Bus namespace and understand the consequences of message settlement and entity administration.
 - Service permissions are managed outside this product; the product reflects granted access and does not elevate it.
 - Microsoft Entra ID includes the normal interactive or pre-established identity choices available in the user's environment; exact credential selection belongs in planning.
-- “Safe SAS” means SAS credentials may be used for a live connection but are never saved in application history, logs, crash details, or generated support information.
-- Non-secret history is local to the current operating-system user and has no cloud synchronization requirement in the MVP.
+- “Safe SAS” means SAS credentials may be used for a live connection and optionally stored only in the current user's native credential vault after explicit opt-in; they are never saved in application history, settings, logs, crash details, generated support information, plaintext files, or application-managed encrypted files.
+- SAS saving is disabled by default for every new or edited profile; prior consent is not inferred for another profile.
+- Windows Credential Manager, macOS Keychain Services, and Linux freedesktop Secret Service through libsecret or a compatible provider are the only approved SAS persistence destinations for this MVP.
+- Non-secret history and opaque credential references are local to the current operating-system user and have no cloud synchronization requirement in the MVP.
+- Opaque credential references are random, reveal no SAS-derived information, and provide no access outside the native vault's authorization boundary.
+- Microsoft Entra access tokens are outside the saved-SAS capability and are never persisted by it.
 - Message content is potentially sensitive. It is displayed only on deliberate inspection and copied or exported only through an explicit user action.
 - Recovery resubmits a replacement message and settles the original only after successful submission when the original is currently settleable; dead-letter messages that cannot be settled after peek are not falsely reported as removed.
 - Service-defined limits and mutable settings take precedence over legacy UI ranges; the product explains rejected values.
@@ -252,6 +274,7 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 
 - Access to representative Azure Service Bus environments for queues, topics, subscriptions, rules, sessions, dead-lettering, transfer dead-lettering, authorization failures, and throttling.
 - Existing Service Bus behavior and contracts may be reused where they satisfy this specification and the project constitution.
+- The current user's operating system provides an available native credential vault when optional SAS persistence is desired; absence of a usable vault degrades to manual SAS entry, not alternate persistence.
 - Human milestone review is required before advancing from requirements, design, implementation units, testing, and preview release.
 
 ## Open Questions
