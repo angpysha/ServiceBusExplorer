@@ -87,8 +87,8 @@ public class ConnectViewModel : ReactiveObject
     public static IReadOnlyList<ServiceBusAuthMode> AuthModes { get; } =
         Enum.GetValues<ServiceBusAuthMode>();
 
-    /// Populated externally (by MainWindowViewModel) from persisted history.
-    public ObservableCollection<string> ConnectionHistory { get; } = new();
+    /// Populated externally from persisted non-secret profile metadata.
+    public ObservableCollection<ConnectionProfile> ConnectionHistory { get; } = [];
 
     public ReactiveCommand<Unit, ConnectionOptions> ConnectCommand { get; }
 
@@ -102,5 +102,13 @@ public class ConnectViewModel : ReactiveObject
         ConnectCommand = ReactiveCommand.Create(
             () => new ConnectionOptions(ConnectionString, AuthMode, TenantId, EntityPath),
             canConnect);
+    }
+
+    public void ApplyProfile(ConnectionProfile profile)
+    {
+        ConnectionString = string.Empty;
+        AuthMode = profile.AuthMode;
+        TenantId = profile.TenantId;
+        EntityPath = profile.EntityPath;
     }
 }

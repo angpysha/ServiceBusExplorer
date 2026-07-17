@@ -1,4 +1,5 @@
 using System.Reactive;
+using System.Reflection;
 using Avalonia.Threading;
 using ReactiveUI;
 using ServiceBusExplorer.ViewModels;
@@ -19,6 +20,14 @@ public class MainWindowViewModel : ReactiveObject
 
     public ReactiveCommand<Unit, Unit> DisconnectCommand { get; }
     public ObservableLoggerProvider LogSink { get; }
+    public string BuildRevision { get; } =
+        Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion
+        ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+        ?? "unknown";
+    public string InternalLimitations { get; } =
+        "Restricted evaluator build: feature parity is incomplete; SAS must be re-entered for every connection; native vault saving is unavailable.";
 
     public MainWindowViewModel(AppBootstrapper bootstrapper)
     {
@@ -27,7 +36,7 @@ public class MainWindowViewModel : ReactiveObject
         _currentPage = _connectVm;
         LogSink = bootstrapper.LogSink;
 
-        // Populate connection history from disk
+        // Populate only non-secret connection profile metadata from disk.
         var settings = bootstrapper.Settings.Load();
         foreach (var cs in settings.ConnectionHistory)
             _connectVm.ConnectionHistory.Add(cs);

@@ -42,15 +42,20 @@
                    SelectionChanged="OnHistorySelectionChanged">
             <ListBox.ItemTemplate>
               <DataTemplate>
-                <Grid ColumnDefinitions="Auto,*" Margin="2,1">
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" Margin="2,1">
                   <!-- Colored dot indicator -->
                   <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4"
                           Background="#0078D4" Margin="0,0,8,0"
                           VerticalAlignment="Center" />
                   <TextBlock Grid.Column="1"
-                             Text="{Binding ., Converter={StaticResource CSLabel}}"
+                             Text="{Binding Label}"
                              FontWeight="SemiBold"
                              VerticalAlignment="Center" />
+                  <TextBlock Grid.Row="1"
+                             Grid.Column="1"
+                             Text="{Binding NamespaceEndpoint}"
+                             FontSize="11"
+                             Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
@@ -63,6 +68,10 @@
                  Text="{Binding ConnectionString}"
                  AcceptsReturn="False"
                  Watermark="Endpoint=sb://namespace.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=..." />
+        <TextBlock Text="SAS values are session-only in this internal build. Enter the full connection string for every connection."
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
 
         <!-- Auth Mode -->
         <TextBlock Text="Authentication" FontWeight="SemiBold" Margin="0,10,0,4" />

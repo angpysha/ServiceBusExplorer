@@ -74,7 +74,7 @@ public class AppBootstrapper : IDisposable
         (_connectionServices as IDisposable)?.Dispose();
         _connectionServices = provider;
 
-        Settings.AddToHistory(opts.ConnectionString);
+        Settings.RecordConnection(opts);
 
         return _connectionServices.GetRequiredService<AppMainViewModel>();
     }
