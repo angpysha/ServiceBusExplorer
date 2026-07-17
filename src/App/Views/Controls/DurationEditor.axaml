@@ -1,0 +1,137 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ServiceBusExplorer.App.Views.Controls.DurationEditor">
+  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+    <TextBox x:Name="PrimaryInput"
+             Grid.Row="0"
+             Grid.Column="0"
+             TabIndex="0"
+             MinWidth="180"
+             TextChanged="OnPrimaryTextChanged"
+             KeyDown="OnEditorKeyDown"
+             AutomationProperties.Name="Duration value"
+             AutomationProperties.HelpText="Enter D.HH:MM:SS or D.HH:MM:SS.fff. Apply in the structured editor to commit." />
+    <Button x:Name="EditButton"
+            Grid.Row="0"
+            Grid.Column="1"
+            TabIndex="1"
+            Content="Edit"
+            Margin="8,0,0,0"
+            Click="OnEditClick"
+            AutomationProperties.Name="Edit duration"
+            AutomationProperties.HelpText="Open the structured duration editor.">
+      <Button.Flyout>
+        <Flyout Placement="Bottom"
+                Opened="OnFlyoutOpened"
+                Closed="OnFlyoutClosed">
+          <Border Padding="16"
+                  MinWidth="360"
+                  MaxWidth="760">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Edit duration"
+                         FontWeight="SemiBold"
+                         FontSize="16" />
+              <TextBlock Text="Use direct typing or Up/Down to change a component. Only Apply commits the value."
+                         TextWrapping="Wrap"
+                         FontSize="11" />
+              <WrapPanel Orientation="Horizontal">
+                <StackPanel Width="126" Margin="0,0,8,8">
+                  <TextBlock x:Name="DaysLabel" Text="Days" />
+                  <TextBox x:Name="DaysInput"
+                           TabIndex="2"
+                           TextChanged="OnComponentTextChanged"
+                           KeyDown="OnComponentKeyDown"
+                           AutomationProperties.Name="Days"
+                           AutomationProperties.HelpText="Non-negative whole number of days." />
+                  <TextBlock x:Name="DaysError"
+                             Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                             TextWrapping="Wrap"
+                             FontSize="10" />
+                </StackPanel>
+                <StackPanel Width="104" Margin="0,0,8,8">
+                  <TextBlock x:Name="HoursLabel" Text="Hours" />
+                  <TextBox x:Name="HoursInput"
+                           TabIndex="3"
+                           TextChanged="OnComponentTextChanged"
+                           KeyDown="OnComponentKeyDown"
+                           AutomationProperties.Name="Hours"
+                           AutomationProperties.HelpText="Whole number from 0 through 23." />
+                  <TextBlock x:Name="HoursError"
+                             Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                             TextWrapping="Wrap"
+                             FontSize="10" />
+                </StackPanel>
+                <StackPanel Width="104" Margin="0,0,8,8">
+                  <TextBlock x:Name="MinutesLabel" Text="Minutes" />
+                  <TextBox x:Name="MinutesInput"
+                           TabIndex="4"
+                           TextChanged="OnComponentTextChanged"
+                           KeyDown="OnComponentKeyDown"
+                           AutomationProperties.Name="Minutes"
+                           AutomationProperties.HelpText="Whole number from 0 through 59." />
+                  <TextBlock x:Name="MinutesError"
+                             Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                             TextWrapping="Wrap"
+                             FontSize="10" />
+                </StackPanel>
+                <StackPanel Width="104" Margin="0,0,8,8">
+                  <TextBlock x:Name="SecondsLabel" Text="Seconds" />
+                  <TextBox x:Name="SecondsInput"
+                           TabIndex="5"
+                           TextChanged="OnComponentTextChanged"
+                           KeyDown="OnComponentKeyDown"
+                           AutomationProperties.Name="Seconds"
+                           AutomationProperties.HelpText="Whole number from 0 through 59." />
+                  <TextBlock x:Name="SecondsError"
+                             Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                             TextWrapping="Wrap"
+                             FontSize="10" />
+                </StackPanel>
+                <StackPanel Width="126" Margin="0,0,0,8">
+                  <TextBlock x:Name="MillisecondsLabel" Text="Milliseconds" />
+                  <TextBox x:Name="MillisecondsInput"
+                           TabIndex="6"
+                           TextChanged="OnComponentTextChanged"
+                           KeyDown="OnComponentKeyDown"
+                           AutomationProperties.Name="Milliseconds"
+                           AutomationProperties.HelpText="Whole number from 0 through 999." />
+                  <TextBlock x:Name="MillisecondsError"
+                             Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                             TextWrapping="Wrap"
+                             FontSize="10" />
+                </StackPanel>
+              </WrapPanel>
+              <TextBlock x:Name="ContextError"
+                         Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                         TextWrapping="Wrap"
+                         AutomationProperties.Name="Duration property validation" />
+              <StackPanel Orientation="Horizontal"
+                          HorizontalAlignment="Right"
+                          Spacing="8">
+                <Button x:Name="ApplyButton"
+                        TabIndex="7"
+                        Content="Apply"
+                        Click="OnApply"
+                        KeyDown="OnEditorKeyDown"
+                        AutomationProperties.Name="Apply duration" />
+                <Button x:Name="CancelButton"
+                        TabIndex="8"
+                        Content="Cancel"
+                        Click="OnCancel"
+                        KeyDown="OnEditorKeyDown"
+                        AutomationProperties.Name="Cancel duration" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </Flyout>
+      </Button.Flyout>
+    </Button>
+    <TextBlock x:Name="PrimaryError"
+               Grid.Row="1"
+               Grid.ColumnSpan="2"
+               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+               TextWrapping="Wrap"
+               FontSize="10"
+               AutomationProperties.Name="Duration validation error" />
+  </Grid>
+</UserControl>
