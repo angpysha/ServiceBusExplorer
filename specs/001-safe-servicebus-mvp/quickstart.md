@@ -184,10 +184,12 @@ Expected:
 - all invalid fields expose associated accessible errors;
 - contextual validation names the property/limit without clamping the draft or shared range.
 
-## Scenario 7: Send View Resolution
+## Scenario 7: Send View Resolution and Guidance
 
 Navigate to Send from queue, topic, and subscription detail without interacting with any duration
-property. Use focused fakes to capture the path passed to the current backend.
+property. Review every field label and helper line with keyboard and assistive technology, then use
+focused fakes to capture the path passed to the current backend. Attempt one send with an empty body
+and one scheduled send.
 
 Expected:
 
@@ -195,8 +197,15 @@ Expected:
 - queue uses its queue path and topic uses its topic path;
 - subscription identifies and uses its parent topic path before send and in success/failure
   outcomes, never a direct subscription path;
+- body and message count are visibly and programmatically required; session ID and schedule delay
+  explain their conditional requirements; all other current properties remain optional;
+- every current input states meaning, format or unit, and Azure effect, while deferred
+  subject/label, partition, reply, absolute scheduling, and TTL fields are named as unavailable;
+- empty body validation preserves the complete draft and starts no backend call;
+- relative scheduling uses `DurationEditor` and preserves the current one-minute through seven-day
+  range;
 - no “view not found”/raw view-model display appears;
-- the resolution test has no dependency on `DurationEditor`.
+- destination resolution remains independent from duration editing.
 
 ## Scenario 8: Final Preview Packages and Coexistence
 

@@ -80,6 +80,28 @@ public class SendAvailabilityTests
     }
 
     [Fact]
+    public async Task Send_WhenBodyIsEmpty_BlocksSubmissionAndPreservesDraft()
+    {
+        var service = new RecordingQueueService();
+        var viewModel = new SendMessageViewModel(
+            service,
+            new SendTargetContext(SendTargetKind.Queue, "orders", "orders"))
+        {
+            Body = "   ",
+            ContentType = "text/plain",
+            MessageId = "draft-id"
+        };
+
+        await viewModel.SendCommand.Execute().ToTask();
+
+        Assert.Empty(service.SendCalls);
+        Assert.Equal("   ", viewModel.Body);
+        Assert.Equal("text/plain", viewModel.ContentType);
+        Assert.Equal("draft-id", viewModel.MessageId);
+        Assert.Contains("Body is required", viewModel.Error);
+    }
+
+    [Fact]
     public async Task Send_WithRelativeSchedule_UsesWholeDurationValue()
     {
         var service = new RecordingQueueService();

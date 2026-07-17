@@ -113,6 +113,12 @@ public class SendMessageViewModel : ReactiveObject
             Outcome = null;
             try
             {
+                if (string.IsNullOrWhiteSpace(Body))
+                {
+                    Error = $"{Target.FailurePrefix}: Body is required.";
+                    return;
+                }
+
                 IReadOnlyDictionary<string, object>? props = null;
                 if (!string.IsNullOrWhiteSpace(PropertiesJson))
                 {

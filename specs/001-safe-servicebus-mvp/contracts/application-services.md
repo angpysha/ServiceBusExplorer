@@ -209,6 +209,13 @@ as an implicit workaround for missing view resolution.
 The same template MUST resolve in queue, topic, and subscription contexts. Context-specific
 destination text comes from `SendTargetContext`, not from separate duplicated views.
 
+The first-internal `SendMessageViewModel` treats non-whitespace body content as required and returns
+a target-specific validation error before any service call when it is absent. The complete draft
+remains unchanged. Content type, message ID, correlation ID, session ID, `To`, and application
+properties retain their current optional backend mapping; presentation guidance may describe
+session ID as conditionally required by a session-enabled destination without making it globally
+required.
+
 ## Operation and Diagnostic Contract
 
 All network ports:
@@ -253,3 +260,5 @@ Fake-backed contract tests MUST prove:
 21. queue, topic, and subscription send tests capture respectively queue path, topic path, and
     parent topic path, and subscription UI/outcomes never claim direct subscription send;
 22. internal startup refuses use when legacy raw history cannot be sanitized or removed.
+23. empty body validation starts no service call and preserves all current draft fields, while
+    optional send properties retain their existing mappings.

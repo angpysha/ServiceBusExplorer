@@ -85,3 +85,12 @@ technology, and cross-platform preview requirement quality
 - [ ] CHK054 Are 820-DIP and 100%/150%/200% acceptance criteria measurable for both duration editors and remaining numeric steppers? [Measurability, Spec §FR-041, FR-047; SC-019]
 - [ ] CHK055 Are relative scheduling durations explicitly included in universal DurationEditor coverage without treating message counts as durations? [Clarity, Spec §FR-044]
 - [ ] CHK056 Are symbol-only add/remove actions explicitly distinguished from numeric steppers and given accessibility requirements appropriate to actions? [Accessibility, Spec §FR-047; UI Contract §Numeric Input Contract]
+
+## First-Internal Send Guidance Review
+
+- [ ] CHK057 Does the Send requirement enumerate every current editable field so “every field” has a measurable denominator? [Completeness, Spec §FR-048; SC-022]
+- [ ] CHK058 Are required, conditionally required, and optional states explicitly assigned without making optional Azure properties mandatory? [Clarity, Spec §FR-048; UI Contract §Send Experience]
+- [ ] CHK059 Are meaning, accepted format or unit, and Azure effect required in both visible guidance and programmatic help for every field? [Accessibility, Spec §FR-048]
+- [ ] CHK060 Are body validation and draft preservation requirements consistent when content is empty, malformed properties are entered, or the backend fails? [Consistency, Spec §FR-015, FR-048; SC-022]
+- [ ] CHK061 Are actual destination guidance and the distinction between requested subscription context and parent-topic publishing retained alongside field help? [Truthful Context, Spec §FR-043, FR-048]
+- [ ] CHK062 Are absent subject/label, partition, reply, absolute scheduling, and TTL fields explicitly documented as deferred rather than implied to exist? [Scope Clarity, UI Contract §Send Experience]

@@ -154,6 +154,12 @@ No constitutional exception or unresolved `NEEDS CLARIFICATION` remains.
     integer formatting, visible spinner controls, explicit per-field limits/increments, labels, and
     automation help. Iconic add actions are not steppers and receive action-specific automation
     names rather than numeric behavior.
+18. **Current Send guidance**: retain the existing draft and backend contract while adding visible
+    helper text plus automation name/help/required semantics to every current input. Body and
+    message count are required; session ID is conditionally required by session-enabled
+    destinations; schedule delay is required only when scheduling is enabled; all other exposed
+    system/application properties remain optional. The page names absent richer properties as
+    deferred rather than presenting unavailable controls.
 
 Detailed rationale is in [research.md](research.md), models in
 [data-model.md](data-model.md), and normative desktop contracts in [contracts/](contracts/).

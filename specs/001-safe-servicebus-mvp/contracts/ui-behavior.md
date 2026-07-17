@@ -119,6 +119,21 @@ delivery consequences.
 - A failed validation or backend attempt leaves the draft available.
 - The first internal version uses the current send backend path. View availability and destination
   truthfulness do not claim broader messaging completeness.
+- A short legend defines `*` as required and distinguishes **required**, **conditionally
+  required**, and **optional** without making optional Azure SDK properties mandatory.
+- Every current editable field has a persistent visible label, concise helper text, and matching
+  automation name/help. Guidance states meaning, expected format or unit, and Azure effect.
+- Current field status is: body and message count are required; session ID is conditionally
+  required for session-enabled destinations; schedule delay is conditionally required when
+  scheduling is enabled; content type, message ID, correlation ID, `To`, application properties,
+  and the scheduling toggle are optional.
+- An empty body is a validation failure and remains in the composer. Application properties remain
+  a JSON object. Schedule delay uses `D.HH:MM:SS[.fff]` and retains the current one-minute through
+  seven-day composer range.
+- The first-internal composer does not expose subject/label, partition key, reply/reply-session
+  fields, absolute scheduling, or message TTL. The page states this limitation; these properties
+  remain deferred to the richer messaging task rather than appearing as disabled or non-functional
+  controls.
 
 ## Keyboard Contract
 
