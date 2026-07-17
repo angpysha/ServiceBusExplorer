@@ -4,7 +4,13 @@
              x:DataType="vm:SendMessageViewModel"
              x:Class="ServiceBusExplorer.App.Views.Queues.SendMessageView">
   <Grid RowDefinitions="Auto,*,Auto">
-    <TextBlock Grid.Row="0" Text="Send Message" FontWeight="SemiBold" Margin="0,0,0,8" />
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Send Message" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding DestinationDescription}"
+                 TextWrapping="Wrap"
+                 AutomationProperties.Name="Actual publish destination"
+                 AutomationProperties.HelpText="Identifies the queue or topic that receives the message." />
+    </StackPanel>
 
     <ScrollViewer Grid.Row="1">
       <StackPanel Spacing="6">
@@ -57,6 +63,11 @@
                  IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                  Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
                  TextWrapping="Wrap" />
+      <TextBlock Text="{Binding Outcome}"
+                 IsVisible="{Binding Outcome, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                 Foreground="#107C10"
+                 TextWrapping="Wrap"
+                 AutomationProperties.Name="Send outcome" />
       <Button Content="Send" Command="{Binding SendCommand}" HorizontalAlignment="Stretch" />
     </StackPanel>
   </Grid>

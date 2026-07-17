@@ -115,7 +115,9 @@ public class TopicDetailViewModel : ReactiveObject
         _confirmationService = confirmationService;
         _topicName = topicName;
         Subscriptions = new SubscriptionListViewModel(subscriptionSvc, topicName);
-        Send = new SendMessageViewModel(queueSvc, topicName);
+        Send = new SendMessageViewModel(
+            queueSvc,
+            new SendTargetContext(SendTargetKind.Topic, topicName, topicName));
 
         NavigateBackCommand = ReactiveCommand.Create(() => _navigateBack.OnNext(Unit.Default));
         ToggleSendPanelCommand = ReactiveCommand.Create(() => { ShowSendPanel = !ShowSendPanel; });

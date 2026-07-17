@@ -176,7 +176,9 @@ public class QueueDetailViewModel : ReactiveObject
         _messageSource.Connect().Bind(out var bound).Subscribe();
         Messages = bound;
 
-        Send = new SendMessageViewModel(svc, queueName);
+        Send = new SendMessageViewModel(
+            svc,
+            new SendTargetContext(SendTargetKind.Queue, queueName, queueName));
 
         NavigateBackCommand = ReactiveCommand.Create(() => _navigateBack.OnNext(Unit.Default));
         ToggleSendPanelCommand = ReactiveCommand.Create(() => { ShowSendPanel = !ShowSendPanel; });

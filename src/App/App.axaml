@@ -40,6 +40,9 @@
     <DataTemplate DataType="{x:Type vm:QueueDetailViewModel}">
       <queues:QueueDetailView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SendMessageViewModel}">
+      <queues:SendMessageView />
+    </DataTemplate>
 
     <!-- Topics -->
     <DataTemplate DataType="{x:Type vm:TopicListViewModel}">

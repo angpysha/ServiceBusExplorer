@@ -15,6 +15,7 @@ public class SendMessageViewModel : ReactiveObject
     private string _propertiesJson = "";
     private bool _isSending;
     private string? _error;
+    private string? _outcome;
     private int _sendCount = 1;
     private bool _useScheduledTime;
     private int _scheduleDelayMinutes = 5;
@@ -73,6 +74,12 @@ public class SendMessageViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _error, value);
     }
 
+    public string? Outcome
+    {
+        get => _outcome;
+        private set => this.RaiseAndSetIfChanged(ref _outcome, value);
+    }
+
     public int SendCount
     {
         get => _sendCount;
@@ -92,14 +99,18 @@ public class SendMessageViewModel : ReactiveObject
     }
 
     public ReactiveCommand<Unit, Unit> SendCommand { get; }
+    public SendTargetContext Target { get; }
+    public string DestinationDescription => Target.DestinationDescription;
 
-    public SendMessageViewModel(IQueueService svc, string entityPath)
+    public SendMessageViewModel(IQueueService svc, SendTargetContext target)
     {
+        Target = target;
         var canSend = this.WhenAnyValue(x => x.IsSending, sending => !sending);
         SendCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             IsSending = true;
             Error = null;
+            Outcome = null;
             try
             {
                 IReadOnlyDictionary<string, object>? props = null;
@@ -111,7 +122,7 @@ public class SendMessageViewModel : ReactiveObject
                     }
                     catch
                     {
-                        Error = "Invalid JSON in Application Properties — send cancelled.";
+                        Error = $"{Target.FailurePrefix}: invalid JSON in Application Properties.";
                         return;
                     }
                 }
@@ -131,15 +142,16 @@ public class SendMessageViewModel : ReactiveObject
                 var count = Math.Max(1, SendCount);
                 for (var i = 0; i < count; i++)
                 {
-                    await svc.SendAsync(entityPath, baseMsg);
+                    await svc.SendAsync(Target.ActualDestinationPath, baseMsg);
                     if (i < count - 1)
                         await Task.Delay(50); // brief pause between batch sends
                 }
                 Body = "";
+                Outcome = Target.SuccessDescription;
             }
-            catch (Exception ex)
+            catch
             {
-                Error = ex.Message;
+                Error = $"{Target.FailurePrefix}. The backend rejected the request.";
             }
             finally
             {

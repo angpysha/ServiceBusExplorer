@@ -186,7 +186,12 @@ public class SubscriptionDetailViewModel : ReactiveObject
         Messages = bound;
 
         Rules = new RuleListViewModel(subSvc, topicName, subscriptionName);
-        Send = new SendMessageViewModel(queueSvc, topicName);
+        Send = new SendMessageViewModel(
+            queueSvc,
+            new SendTargetContext(
+                SendTargetKind.Subscription,
+                _entityPath,
+                topicName));
 
         NavigateBackCommand = ReactiveCommand.Create(() => _navigateBack.OnNext(Unit.Default));
         ToggleSendPanelCommand = ReactiveCommand.Create(() => { ShowSendPanel = !ShowSendPanel; });
