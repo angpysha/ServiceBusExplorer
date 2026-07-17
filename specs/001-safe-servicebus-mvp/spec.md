@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-16
 
-**Status**: Approved requirements — amended 2026-07-17 for optional native-vault SAS persistence
+**Status**: Approved requirements — amended 2026-07-17 for optional native-vault SAS persistence and compact duration editing
 
 **Input**: Deliver a minimum working cross-platform Service Bus Explorer centered on safe Azure Service Bus administration and message recovery while retaining the legacy application during preview.
 
@@ -13,6 +13,7 @@
 ### Session 2026-07-17
 
 - Q: May users persist a full SAS connection string for reconnect? → A: Yes, only through an explicit option that is disabled by default and stores the string in the operating system's native credential vault; history retains only an opaque random reference, and Microsoft Entra access tokens are never persisted.
+- Q: Which duration-entry experience replaces the arrow-heavy TimeSpanControl? → A: A compact invariant-format duration text field with an adjacent Edit affordance that opens a fully labeled structured editor popover; values remain visible, keyboard and assistive-technology behavior is explicit, and service-specific limits are contextual validation rather than editor range limits.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -107,8 +108,15 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 1. **Given** a supported operating system, **When** the user installs or extracts its documented preview package, **Then** the application launches and its version and preview status are identifiable.
 2. **Given** keyboard-only use, **When** the user completes connect, navigation, send, receive, and confirmation workflows, **Then** focus order, focus visibility, labels, and shortcuts make every required action operable.
 3. **Given** a screen reader, **When** the user navigates forms, entity trees, tables, message details, duration inputs, errors, and confirmations, **Then** meaningful names, roles, values, validation, and state changes are announced.
-4. **Given** a duration with days, hours, minutes, seconds, and milliseconds, **When** it is viewed and edited, **Then** the complete value is preserved without an arbitrary product-imposed day cap.
+4. **Given** a duration value, **When** it is shown in the compact primary field, **Then** it uses the invariant format `D.HH:MM:SS[.fff]`, where days contain one or more digits, hours/minutes/seconds contain exactly two digits, and milliseconds appear as exactly three digits only when non-zero.
 5. **Given** a Windows preview installation, **When** the user needs an excluded workflow, **Then** the legacy application remains available as a separate fallback and is not silently replaced.
+6. **Given** focus on the adjacent Edit affordance, **When** the user activates it, **Then** a structured popover opens with persistent full labels for Days, Hours, Minutes, Seconds, and Milliseconds and supports direct numeric typing plus keyboard Up/Down increments.
+7. **Given** edits in the duration popover, **When** the user selects Apply, **Then** the valid composed duration becomes the bound value and focus returns to the Edit affordance.
+8. **Given** edits in the duration popover, **When** the user selects Cancel or presses Escape, **Then** the original bound value is restored unchanged, the popover closes, and focus returns to the Edit affordance.
+9. **Given** one or more invalid duration components, **When** validation runs, **Then** each invalid field exposes its own error and the bound value remains unchanged.
+10. **Given** the application at its documented minimum supported width and at 100%, 150%, or 200% display scaling, **When** any representable duration is displayed or edited, **Then** numeric values remain readable and are not clipped, obscured, or covered by increment controls.
+11. **Given** a user of assistive technology, **When** focus moves through the compact duration field, Edit affordance, popover components, validation, and actions, **Then** each exposes its accessible name, current value, format or action help, and any field-specific error in logical order.
+12. **Given** a duration that is representable by the product but outside the limit of the Azure property being edited, **When** the user applies it, **Then** contextual validation names the property and accepted limit without changing the duration or narrowing the general editor range.
 
 ### Edge Cases
 
@@ -136,6 +144,12 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - Session identifiers may be empty where prohibited, unavailable, locked elsewhere, or associated with no messages.
 - Rule creation must account for the default catch-all rule; the user is warned when a rule change would unintentionally broaden or stop delivery.
 - Entity names, paths, filters, and values at service limits are validated; zero, negative, infinite, and sub-millisecond duration boundaries are handled explicitly.
+- A compact duration may omit milliseconds only when they are zero; parsing and display never reinterpret a day component as hours or milliseconds as another unit.
+- Empty, non-numeric, negative, fractional-component, or out-of-component-range duration input identifies the affected field and does not mutate the bound duration.
+- A duration may be representable by the editor but invalid for a particular Azure property; the editor retains the value while contextual validation names that property and its accepted limit.
+- Escape, Cancel, focus movement, validation failure, or popover dismissal cannot partially commit a duration; only Apply with a valid editor value commits.
+- At the minimum supported window width or 100%, 150%, and 200% scaling, the primary value and popover fields reflow or resize without truncating unit labels or placing increment controls over numeric text.
+- Extremely long day values remain scannable in the primary field and editable without a permanent row of spinner buttons; overflow is handled without hiding digits behind controls.
 - Concurrent administration changes produce a conflict or refreshed state rather than silently overwriting newer values.
 - Confirmation is required for deletion, purge, receive-and-delete, bulk settlement, and bulk recovery; cancellation leaves service state unchanged.
 - A multi-item operation can partially succeed; per-item outcomes support safe retry without automatically repeating successful work.
@@ -181,9 +195,15 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **FR-030**: The product MUST provide clear empty, loading, completed, cancelled, stale, partial-success, and failure states for connection, administration, and message workflows.
 - **FR-031**: Required workflows MUST be operable by keyboard alone with visible focus and logical focus order.
 - **FR-032**: Interactive controls, tables, trees, forms, message states, validation, progress, and confirmations MUST expose meaningful names, roles, values, and changes to assistive technology.
-- **FR-033**: Duration values MUST display and preserve days, hours, minutes, seconds, and millisecond precision across view and edit operations, without an arbitrary product-imposed day cap.
+- **FR-033**: Duration values MUST display and preserve days, hours, minutes, seconds, and millisecond precision across view and edit operations, without an arbitrary product-imposed day cap or a smaller editor range than the product's shared duration value range.
 - **FR-034**: Supported preview packages MUST identify operating system, architecture, version, preview status, installation or extraction steps, and known limitations.
-- **FR-035**: Automated verification MUST cover safety-critical source routing, destructive confirmations, default-disabled SAS saving, native-vault-only SAS persistence and lifecycle behavior on each platform, absence of secrets and access tokens from history and settings, authentication option handling, message settlement eligibility, session loss, recovery partial failure, accessibility semantics, and package launch checks.
+- **FR-035**: Automated verification MUST cover safety-critical source routing, destructive confirmations, default-disabled SAS saving, native-vault-only SAS persistence and lifecycle behavior on each platform, absence of secrets and access tokens from history and settings, authentication option handling, message settlement eligibility, session loss, recovery partial failure, duration formatting and editing, the no-obscured-numeric-value regression, accessibility semantics, and package launch checks.
+- **FR-036**: The primary duration field MUST fit on one form row and display an unambiguous invariant value in the format `D.HH:MM:SS[.fff]`: one or more day digits, exactly two digits each for hours, minutes, and seconds, and an optional exactly three-digit millisecond segment omitted only when zero.
+- **FR-037**: An adjacent, accessible Edit affordance MUST open a structured duration popover whose Days, Hours, Minutes, Seconds, and Milliseconds labels remain fully visible; each component MUST support direct numeric typing and keyboard Up/Down increments without permanently visible spinner-arrow controls in the primary form. Days MUST be a non-negative whole number within the shared duration range, Hours MUST be 0–23, Minutes and Seconds MUST each be 0–59, and Milliseconds MUST be 0–999.
+- **FR-038**: Duration interaction MUST have a logical focus order; expose accessible name, current value, format help, and field-specific error semantics; make Escape and Cancel discard all pending edits; make Apply the only commit action; and return focus to the Edit affordance after the popover closes.
+- **FR-039**: Empty, malformed, negative, fractional-component, or out-of-range component input MUST identify every affected field and MUST NOT mutate the bound duration; Cancel or Escape MUST restore the exact original value after any valid or invalid pending edits.
+- **FR-040**: The duration editor's representable range MUST match the product's shared non-negative duration value range independently of any Azure property limit. Service-specific minimums, maximums, and special constraints MUST be presented as contextual validation naming the affected property, without narrowing the editor's general range or silently changing the value.
+- **FR-041**: At the application's documented minimum supported width and at 100%, 150%, and 200% display scaling, the primary duration value, full popover labels, numeric components, validation text, and actions MUST remain available without clipping, overlap, or digits disappearing behind increment controls; the layout MAY reflow to satisfy this requirement.
 
 ### Key Entities
 
@@ -195,6 +215,7 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **Message Source**: The explicitly selected active, dead-letter, or transfer dead-letter location from which messages are inspected or consumed.
 - **Message Draft**: User-entered body, system properties, custom properties, destination, and scheduling values prepared for sending.
 - **Observed Message**: Message body representation and metadata obtained by peek or receive, including source, sequence number, lock and session state, and settlement eligibility.
+- **Duration Value**: A product-wide non-negative value composed of days, hours, minutes, seconds, and milliseconds, with documented minimum and maximum endpoints independent of the narrower limits that individual Azure properties may impose.
 - **Session**: Ordered message ownership context identified by a session identifier and time-bound lock.
 - **Recovery Operation**: A user-confirmed attempt to retrieve and/or resubmit selected messages, with source, destination, property treatment, and per-item outcomes.
 - **Operation Outcome**: Completed, cancelled, stale, partial, or failed result containing actionable non-secret context.
@@ -232,6 +253,7 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **Recovery**: Chosen — user-selected messages, explicit destination, send-before-settle, and partial outcome reporting. Rejected — automatic whole-source replay; settle-before-send; silent property rewriting.
 - **Legacy coexistence**: Chosen — separate modern preview and legacy Windows application during the MVP. Rejected — replacing the legacy application at first preview; expanding the MVP until full legacy parity.
 - **Excluded services**: Chosen — Service Bus focus. Rejected — broad multi-service parity in the first MVP; visible non-working shells for excluded services.
+- **Duration editing**: Chosen — one compact invariant-format primary field plus an adjacent Edit affordance opening a fully labeled structured popover with typing and keyboard increments. Rejected — a permanently expanded wall of per-component spinner arrows; clipped narrow component fields; subjective visual acceptance such as “attractive” without observable layout criteria.
 
 ## Success Criteria *(mandatory)*
 
@@ -246,10 +268,13 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **SC-007**: Session and selected-message recovery tests produce no duplicate automatic retries, preserve the original until replacement send succeeds, and report every partial failure.
 - **SC-008**: All P1 workflows can be completed by keyboard alone on each supported operating system, with no keyboard trap and with visible focus at every step.
 - **SC-009**: Screen-reader review finds meaningful accessible names and state announcements for 100% of controls in the P1 workflows and all destructive confirmations.
-- **SC-010**: Duration round-trip tests preserve millisecond precision and values greater than 365 days wherever the service accepts them.
+- **SC-010**: Duration round-trip tests preserve the exact value through `D.HH:MM:SS[.fff]` display, structured editing, Apply, Cancel, and Escape, including zero, non-zero milliseconds, and values greater than 365 days.
 - **SC-011**: Automated safety and workflow checks pass on every supported change, and each operating-system package passes a launch smoke test before preview publication.
 - **SC-012**: During preview, the legacy Windows application remains buildable and separately launchable, and the preview documentation identifies excluded workflows and fallback guidance.
 - **SC-013**: On Windows, macOS, and Linux, 100% of SAS persistence acceptance tests verify that saving is disabled by default, explicit opt-in writes only to the designated native vault, update and removal affect the referenced vault entry as requested, and an unavailable or missing vault credential preserves the profile and prompts for SAS with no file fallback.
+- **SC-014**: At the documented minimum supported application width and at 100%, 150%, and 200% scaling, all duration layout checks show the complete primary value, five full component labels, numeric values, validation text, and Apply/Cancel actions with zero clipping, overlap, or digits obscured by increment controls.
+- **SC-015**: Keyboard-only tests complete open, component traversal, direct typing, Up/Down increment, validation, Apply, Cancel, and Escape flows with the documented logical focus order and focus returning to the Edit affordance in 100% of tested closures.
+- **SC-016**: In 100% of invalid-input tests, every invalid duration component has a field-specific accessible error and the bound value remains exactly unchanged from its pre-edit value; in service-limit tests, the general editor retains the representable value while contextual validation names the constrained Azure property.
 
 ## Assumptions
 
@@ -265,6 +290,9 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - Message content is potentially sensitive. It is displayed only on deliberate inspection and copied or exported only through an explicit user action.
 - Recovery resubmits a replacement message and settles the original only after successful submission when the original is currently settleable; dead-letter messages that cannot be settled after peek are not falsely reported as removed.
 - Service-defined limits and mutable settings take precedence over legacy UI ranges; the product explains rejected values.
+- The primary duration format is invariant and does not change with operating-system locale; `0.00:00:00`, `12.03:04:05`, and `12.03:04:05.006` are representative valid displays.
+- Hours, minutes, seconds, and milliseconds are component fields; service-specific duration constraints are not treated as component ranges or as the editor's general representable range.
+- The release must document a minimum supported application width before responsive duration acceptance testing; no visual approval depends on the subjective term “attractive.”
 - Bounded retrieval is acceptable for large namespaces and message sources when continuation and refresh are clear.
 - English is the only required interface language for the first MVP.
 - Supported operating-system versions and package formats will be selected during planning, but Windows, macOS, and Linux must each have a launchable preview artifact.

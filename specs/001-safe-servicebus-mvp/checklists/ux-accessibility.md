@@ -35,7 +35,7 @@ technology, and cross-platform preview requirement quality
 
 - [ ] CHK017 Are empty, text, structured, binary, malformed, and truncated message representations specified with metadata preservation? [Completeness, Spec §FR-022]
 - [ ] CHK018 Are sensitive copy/export warnings and deliberate-action requirements consistent for keyboard and assistive-technology users? [Consistency, Spec §FR-021, FR-031–FR-032]
-- [ ] CHK019 Are duration field ranges, normalization, validation, and exact round-trip expectations specified through milliseconds and beyond 365 days? [Clarity, Spec §FR-033; SC-010]
+- [ ] CHK019 Are duration component ranges, invariant formatting, validation, and exact round-trip expectations specified through milliseconds and beyond 365 days? [Clarity, Spec §FR-033, FR-036–FR-040; SC-010]
 - [ ] CHK020 Are OS, architecture, version, preview status, signing status, launch steps, and known limitations required for each package? [Completeness, Spec §FR-034]
 - [ ] CHK021 Are supported OS floors and package formats recorded as reviewable planning decisions rather than left implicit? [Dependency, Spec §Assumptions]
 - [ ] CHK022 Is legacy Windows fallback wording required to distinguish coexistence from automatic replacement or migration? [Consistency, Spec §FR-002; SC-012]
@@ -50,3 +50,18 @@ technology, and cross-platform preview requirement quality
 - [ ] CHK028 Does profile removal require a separate, understandable choice for native-vault cleanup and explain partial failure? [Completeness, Spec §User Story 1 AC-8; FR-007]
 - [ ] CHK029 Are vault prompts, permissions, errors, and cleanup choices keyboard-operable and exposed with meaningful assistive-technology semantics? [Accessibility, Spec §FR-031–FR-032, FR-035]
 - [ ] CHK030 Is Entra wording consistent that no access token is saved by this feature and no SAS-save control applies to Entra profiles? [Consistency, Spec §User Story 1 AC-9; FR-006]
+
+## Compact Duration Editor Amendment
+
+- [ ] CHK031 Is the primary duration field required to occupy one form row and use exactly `D.HH:MM:SS[.fff]`, including fixed-width component rules and millisecond omission only when zero? [Measurability, Spec §User Story 5 AC-4; FR-036]
+- [ ] CHK032 Is the adjacent Edit affordance required to open a structured popover with persistent full labels for Days, Hours, Minutes, Seconds, and Milliseconds? [Completeness, Spec §User Story 5 AC-6; FR-037]
+- [ ] CHK033 Are direct numeric typing and keyboard Up/Down increments required without permanently visible spinner arrows in the primary form? [Interaction, Spec §FR-037; Duration Editing Decision]
+- [ ] CHK034 Are component ranges and field-specific errors explicit enough to test empty, malformed, negative, fractional, and out-of-range values without mutating the bound duration? [Validation, Spec §FR-039; SC-016]
+- [ ] CHK035 Are Escape, Cancel, Apply, and all popover-close paths specified with exact commit/discard behavior and focus returning to the Edit affordance? [Keyboard/Focus, Spec §User Story 5 AC-7–AC-8; FR-038]
+- [ ] CHK036 Are accessible name, current value, format help, field labels, and error semantics required for both the compact field and structured editor? [Assistive Technology, Spec §FR-038]
+- [ ] CHK037 Is the editor's general representable range explicitly separated from contextual Azure-property limits without silent clamping or mutation? [Range Semantics, Spec §FR-040; SC-016]
+- [ ] CHK038 Are minimum-width and 100%, 150%, and 200% scaling checks required to show complete values, full labels, validation, and actions with zero clipping or overlap? [Responsive Measurability, Spec §FR-041; SC-014]
+- [ ] CHK039 Does regression coverage explicitly prevent numeric values from disappearing behind increment or spinner controls? [Regression, Spec §FR-035, FR-041; SC-014]
+- [ ] CHK040 Is “compact and scannable” measured by one-row complete-value display, no permanent arrow wall, full labels on demand, and zero clipping rather than subjective attractiveness? [Visual Acceptance, Spec §FR-036–FR-037; Scope Decision; SC-014]
+- [ ] CHK041 Is the shared whole-millisecond range defined with exact endpoints so “representable” can be tested independently from Azure property constraints? [Measurability, Spec §FR-033, FR-040]
+- [ ] CHK042 Is `SendMessageViewModel` DataTemplate registration explicitly assigned to the send slice and tested independently, rather than hidden inside DurationEditor acceptance? [Separation, Spec §Known defect; Plan §Send view registration]

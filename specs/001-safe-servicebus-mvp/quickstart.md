@@ -128,7 +128,40 @@ Expected:
   confirmations have meaningful announced semantics;
 - color is not the sole status/risk indicator.
 
-## Scenario 6: Packages and Coexistence
+## Scenario 6: Transactional DurationEditor
+
+1. At application `MinWidth=820`, open each duration property and confirm the primary row shows
+   `D.HH:MM:SS[.fff]` plus **Edit duration**.
+2. Repeat at 100%, 150%, and 200% scaling with zero, non-zero milliseconds, greater than 365 days,
+   and maximum `10675199.02:48:05.477`.
+3. Type strict invariant text in the primary draft and use the Flyout's labelled Days/Hours/
+   Minutes/Seconds/Milliseconds fields.
+4. Traverse by keyboard, use Up/Down on each component, then test Apply, Cancel, Escape, and light
+   dismiss.
+5. Enter empty, malformed, negative, fractional, per-component out-of-range, and total-overflow
+   values in multiple fields.
+6. Enter a shared-range value outside a selected Azure property's allowed range.
+
+Expected:
+
+- no permanent spinner arrows, clipped labels/actions, overlap, or digits hidden behind adorners;
+- strict Core parsing/formatting round-trips whole milliseconds across the full shared range;
+- only valid Apply mutates the bound value exactly once;
+- every non-Apply close preserves the exact original and returns focus to Edit;
+- all invalid fields expose associated accessible errors;
+- contextual validation names the property/limit without clamping the draft or shared range.
+
+## Scenario 7: Send View Resolution
+
+Navigate to Send from queue and subscription detail without interacting with any duration property.
+
+Expected:
+
+- App resolves `SendMessageViewModel` to the existing `SendMessageView`;
+- no “view not found”/raw view-model display appears;
+- the resolution test has no dependency on `DurationEditor`.
+
+## Scenario 8: Packages and Coexistence
 
 Produce and smoke-test:
 

@@ -18,6 +18,9 @@ erDiagram
     LIVE_CONNECTION ||--o{ MESSAGING_ENTITY : exposes
     MESSAGING_ENTITY ||--o{ SUBSCRIPTION_RULE : contains
     MESSAGING_ENTITY ||--o{ OBSERVED_MESSAGE : yields
+    MESSAGING_ENTITY ||--o{ DURATION_CONSTRAINT : defines
+    DURATION_CONSTRAINT }o--|| DURATION_VALUE : validates
+    DURATION_EDIT_TRANSACTION ||--|| DURATION_VALUE : snapshots
     OBSERVED_MESSAGE }o--|| MESSAGE_SOURCE : came_from
     OBSERVED_MESSAGE }o--o| SESSION_CONTEXT : belongs_to
     RECOVERY_OPERATION ||--|{ RECOVERY_ITEM : contains
@@ -190,6 +193,74 @@ Validation:
 - reserved/conflicting/duplicate-case property names are rejected specifically;
 - duration precision is milliseconds and no product day cap is applied;
 - body/properties are never routine diagnostic fields.
+
+## DurationValue
+
+Framework-neutral immutable product value:
+
+| Field/derived component | Range |
+|---|---|
+| TotalMilliseconds | `0..922337203685477` |
+| Days | `0..10675199`, constrained by composed total |
+| Hours | `0..23` |
+| Minutes | `0..59` |
+| Seconds | `0..59` |
+| Milliseconds | `0..999` |
+
+`DurationValue` stores total whole milliseconds and can losslessly map to/from a non-negative
+millisecond-aligned `TimeSpan`. Negative values, sub-millisecond ticks, overflow, infinity, and
+fractional components are outside the shared range.
+
+Strict canonical representation:
+
+- grammar: `D.HH:MM:SS` or `D.HH:MM:SS.fff`;
+- `D` is one or more ASCII decimal digits with no sign;
+- `HH`, `MM`, and `SS` are exactly two digits;
+- `fff` is exactly three digits and is omitted only when milliseconds equal zero;
+- parsing is culture-invariant and never interprets a missing day, unit suffix, locale separator,
+  or alternate component width.
+
+Representative values: `0.00:00:00`, `12.03:04:05`, `12.03:04:05.006`, and maximum
+`10675199.02:48:05.477`.
+
+## DurationConstraint
+
+Contextual validation record separate from `DurationValue`:
+
+- Azure property display/name;
+- optional inclusive minimum and maximum `DurationValue`;
+- explicit allowed special-value policy, if that property supports one;
+- safe validation message template.
+
+A constraint may report that a representable value cannot be applied to a named Azure property. It
+MUST NOT clamp, normalize, mutate, or redefine the shared `DurationValue` range.
+
+## DurationEditTransaction
+
+App-facing transaction state with framework-neutral semantics:
+
+- `Original`: immutable bound snapshot captured when editing begins;
+- `PrimaryDraft`: invariant text draft;
+- `ComponentDrafts`: raw Days/Hours/Minutes/Seconds/Milliseconds strings;
+- `FieldErrors`: parse/component errors keyed by field;
+- `ContextError`: optional named Azure property limit error;
+- `Candidate`: composed `DurationValue` only when all shared validation passes.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Editing: open or type; snapshot Original
+    Editing --> Invalid: parse/component/context failure
+    Invalid --> Editing: correct draft
+    Editing --> Committed: Apply valid Candidate
+    Invalid --> Invalid: Apply blocked
+    Editing --> Cancelled: Cancel/Escape/light-dismiss
+    Invalid --> Cancelled: Cancel/Escape/light-dismiss
+    Committed --> Closed: bound value changes once; focus Edit
+    Cancelled --> Closed: Original unchanged; focus Edit
+```
+
+No draft field binds directly to the committed value. Apply is the sole commit transition.
 
 ## ObservedMessage
 

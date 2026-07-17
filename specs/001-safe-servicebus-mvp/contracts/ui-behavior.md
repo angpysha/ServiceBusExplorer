@@ -118,9 +118,61 @@ Color is never the only indicator of source, risk, status, selection, or failure
 
 ## Duration Contract
 
-Duration editing exposes days, hours, minutes, seconds, and milliseconds. Values greater than 365
-days and millisecond precision round-trip without a product cap. Service-invalid values produce
-field-level validation while preserving the entered value.
+### Primary surface
+
+- The control is named `DurationEditor`; the modern `TimeSpanControl` name and implementation are
+  retired. No WinForms popup, message-loop, WndProc, or P/Invoke code is reused.
+- One form row contains a compact invariant text field and adjacent **Edit duration** button.
+- Closed-state text is Core-formatted `D.HH:MM:SS[.fff]`. The primary field accepts direct invariant
+  typing as a draft; typing begins the same transaction and exposes the structured editor so Apply
+  remains the only commit action.
+- The field exposes the current committed value, format help, and invalid-text error. It never
+  two-way binds raw text directly to the bound value.
+
+### Structured editor
+
+- Edit opens an Avalonia Flyout/Popup anchored to the button and snapshots the exact bound value.
+- Focus enters Days, then Hours, Minutes, Seconds, Milliseconds, field errors, Apply, and Cancel in
+  logical visual order.
+- Every component has a persistent full `Label` associated with its input; abbreviations and
+  placeholders do not replace labels.
+- Direct typing is primary. Keyboard Up/Down increments the focused valid component within its
+  component range. App MAY use `NumericUpDown` with `ShowButtonSpinner=False` and
+  `AllowSpin=True`; permanently visible arrow buttons are prohibited.
+- Days permits all values that can compose within the shared range; Hours is 0–23, Minutes and
+  Seconds 0–59, and Milliseconds 0–999. Inputs retain enough width/scroll behavior that digits
+  remain inspectable and editable.
+
+### Transaction and validation
+
+- Draft text/components are isolated from the bound `DurationValue`.
+- Apply validates all fields, composition/overflow, and the supplied Azure-property constraint.
+  A valid candidate commits exactly once, closes, and returns focus to Edit.
+- Empty, malformed, negative, fractional, component-range, or composed-overflow failures identify
+  every affected field and keep the editor open with bound value unchanged.
+- A contextual service-limit failure names the Azure property and accepted limit, retains the
+  representable draft, and leaves the bound value unchanged. It never clamps or changes the
+  editor's shared range.
+- Cancel, Escape, light dismiss, window deactivation/closure, or any non-Apply close discards the
+  entire draft, leaves the exact original bound value unchanged, and returns focus to Edit when the
+  owning window remains active.
+
+### Responsive and accessible behavior
+
+- Automated layout matrices render at the current app minimum width of 820 device-independent
+  pixels and scale factors 1.0, 1.5, and 2.0.
+- The primary row, maximum canonical value `10675199.02:48:05.477`, all five labels/inputs, errors,
+  and Apply/Cancel remain available with no clipping, overlap, or digit hidden by adorners. The
+  Flyout MAY reflow vertically and constrain itself to the work area.
+- Automation semantics expose control name, committed value, invariant-format help, Edit action,
+  each label/current draft value, validation relationship, and Apply/Cancel purpose. Validation is
+  announced without moving focus unexpectedly.
+
+### Independent send-view defect
+
+`SendMessageViewModel` resolving to no view is not a duration-control failure. App registers its
+existing `SendMessageView` DataTemplate and verifies template resolution in the send-message slice;
+DurationEditor tests neither own nor mask that repair.
 
 ## Preview Package Contract
 

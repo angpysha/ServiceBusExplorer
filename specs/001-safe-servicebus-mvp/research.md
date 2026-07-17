@@ -26,6 +26,13 @@ documentation.
 - No Avalonia confirmation abstraction or `AutomationProperties` metadata was found in the
   indexed modern views. App composition currently registers Relay and Event Hubs even though they
   are excluded from this MVP.
+- `src/App/Views/Controls/TimeSpanControl.axaml(.cs)` currently renders four permanently visible
+  `NumericUpDown` controls, caps days at 36,500, omits milliseconds, and writes `TimeSpan` on every
+  component change. It has no Apply/Cancel transaction.
+- Legacy `src/ServiceBusExplorer/Controls/Popup.cs` and related WinForms controls depend on Windows
+  message/window behavior and are not reusable in Avalonia.
+- `SendMessageView` exists, and queue/subscription views bind a `SendMessageViewModel` through
+  `ContentControl`, but `src/App/App.axaml` has no corresponding DataTemplate registration.
 
 ## Decisions
 
@@ -242,6 +249,61 @@ the connection-safety slice.
 This does not block T001 because credential vault work remains in the later connection-safety
 slice.
 
+### R12. Transactional DurationEditor
+
+**Decision**:
+
+- Replace and rename only the modern Avalonia `TimeSpanControl` as `DurationEditor`; never port the
+  WinForms `Popup`, `PopupComboBox`, WndProc, or P/Invoke implementation.
+- Core owns immutable `DurationValue`, represented as total whole milliseconds from zero through
+  `922337203685477` (the largest whole-millisecond value that fits `TimeSpan`), plus strict
+  invariant parse/format/component validation.
+- Canonical text is `D.HH:MM:SS[.fff]`: days are unpadded one-or-more digits, HH/MM/SS are exactly
+  two digits, and `.fff` appears only for non-zero milliseconds.
+- `DurationConstraint` is a separate contextual rule carrying Azure property name, minimum,
+  maximum, and special-value policy. It can reject Apply but cannot clamp or narrow the shared
+  editor range.
+- App owns a compact primary text draft and adjacent Edit button. Editing either representation
+  creates an isolated draft. The attached Avalonia Flyout/Popup exposes labelled Days, Hours,
+  Minutes, Seconds, and Milliseconds inputs.
+- Only Apply with valid shared and contextual validation commits. Cancel, Escape, light dismiss,
+  focus movement, or validation failure discards/retains draft as appropriate but never mutates the
+  bound value; every close restores focus to Edit.
+- Direct typing is primary. A structured component MAY use Avalonia `NumericUpDown` with
+  `ShowButtonSpinner=False` and `AllowSpin=True`, preserving keyboard Up/Down without visible arrow
+  buttons.
+- Layout acceptance uses the existing application minimum width of 820 device-independent pixels
+  and scale factors 1.0, 1.5, and 2.0. The maximum canonical string has 21 characters and must remain
+  visible/selectable; component labels, values, errors, and actions may reflow but never clip or
+  overlap.
+
+**Rationale**: The existing control mutates eagerly, loses milliseconds, imposes an arbitrary day
+cap, and consumes a wide row with spinner controls. Core parsing makes semantics deterministic and
+reusable; App-only presentation follows Avalonia's per-monitor scaling and Flyout model.
+
+**Alternatives considered**:
+
+- Keep the existing four-spinner control and add milliseconds: rejected for eager mutation, width,
+  inaccessible abbreviations, and hidden/clipped-value risk.
+- Port the WinForms popup: rejected because Windows message/PInvoke behavior violates the
+  cross-platform App boundary.
+- Use a text field only: rejected because structured labelled input and field-specific errors are
+  approved requirements.
+- Permanently show five `NumericUpDown` controls: rejected because spinner arrows and fixed narrow
+  fields caused the approved UX defect.
+- Clamp the editor to each Azure property: rejected because it conflates product representation
+  with contextual service validation.
+
+### R13. Send DataTemplate Defect Is Independent
+
+**Decision**: Register `SendMessageViewModel -> SendMessageView` in App composition as part of the
+send-message implementation slice. Its test asserts template resolution separately. DurationEditor
+work does not own, hide, or opportunistically repair send view registration.
+
+**Rationale**: The missing template prevents an existing view model from resolving, but it has no
+duration dependency. Keeping ownership separate avoids making DurationEditor appear to fix the send
+surface accidentally.
+
 ## Clarification Resolution
 
 | Planning question | Resolution |
@@ -255,6 +317,10 @@ slice.
 | Optional SAS storage | Default-off native vault through async `ICredentialVault`; opaque reference only |
 | Vault failure | Typed outcome, preserve profile/reference, prompt for SAS, no file fallback |
 | Credential package | No selection; `ktsu.CredentialCache` 1.2.3 rejected; adapter spike required |
+| Duration range | Whole milliseconds `0..922337203685477`, independent of Azure property limits |
+| Duration UI | Transactional Avalonia `DurationEditor`; invariant compact field plus labelled Flyout |
+| Scaling baseline | Existing app minimum width 820 DIPs at 1.0/1.5/2.0 |
+| Send DataTemplate | Separate send-slice App composition defect; not DurationEditor scope |
 
 No `NEEDS CLARIFICATION` item remains.
 
@@ -278,3 +344,7 @@ No `NEEDS CLARIFICATION` item remains.
   <https://gnome.pages.gitlab.gnome.org/libsecret/libsecret-simple-api.html>
 - `ktsu.CredentialCache` v1.2.3 release, README, and MIT license:
   <https://github.com/ktsu-dev/CredentialCache/releases/tag/v1.2.3>
+- Avalonia NumericUpDown (`ShowButtonSpinner`, `AllowSpin`) and Flyout documentation:
+  <https://docs.avaloniaui.net/docs/reference/controls/numericupdown>
+- Avalonia Windows high-DPI/per-monitor scaling guidance:
+  <https://docs.avaloniaui.net/docs/guides/platforms/windows>

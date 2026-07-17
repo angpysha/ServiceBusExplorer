@@ -153,6 +153,30 @@ Queue, topic, subscription, and rule create/update/delete contracts:
 - return conflict/stale rather than overwrite a newer service value;
 - represent default catch-all rule behavior explicitly.
 
+## Duration Value Contract
+
+Core MUST expose a framework-neutral immutable `DurationValue` and validation functions with no
+Avalonia, WinForms, culture, popup, or control dependency.
+
+- Shared range is total whole milliseconds `0..922337203685477`.
+- `FormatInvariant()` returns exactly `D.HH:MM:SS[.fff]`; milliseconds are omitted only when zero.
+- Strict parse accepts only that invariant grammar and returns typed field/format/overflow errors.
+- Component composition accepts non-negative whole Days, Hours 0–23, Minutes/Seconds 0–59, and
+  Milliseconds 0–999, then checks composed-total overflow.
+- Conversion to/from `TimeSpan` rejects negatives and non-zero sub-millisecond ticks rather than
+  silently rounding.
+- `DurationConstraint` validates a candidate for a named Azure property independently of shared
+  representability. Context failure leaves the candidate and bound value unchanged and identifies
+  property plus accepted limit.
+- Services map `DurationValue` to Azure SDK `TimeSpan` only at the adapter boundary.
+
+## App View Resolution Contract
+
+App composition MUST register `SendMessageViewModel -> SendMessageView` as an explicit
+`DataTemplate`. This is a send-page defect and MUST be tested/fixed in the send-message slice,
+independently of `DurationEditor`. Duration control implementation or registration MUST NOT be used
+as an implicit workaround for missing view resolution.
+
 ## Operation and Diagnostic Contract
 
 All network ports:
@@ -184,3 +208,8 @@ Fake-backed contract tests MUST prove:
     unproven stored/deleted state;
 13. native adapters use only the designated platform store and create no fallback file;
 14. Entra token paths never invoke `ICredentialVault`.
+15. duration parsing/formatting round-trips every boundary value using invariant grammar;
+16. component and composed overflow errors never create or mutate a bound value;
+17. contextual Azure property validation never narrows or clamps `DurationValue`;
+18. App template resolution returns `SendMessageView` for `SendMessageViewModel` without loading or
+    depending on `DurationEditor`.

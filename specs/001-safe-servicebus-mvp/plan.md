@@ -13,8 +13,10 @@ framework-neutral confirmation port, and route every connection through one conn
 factory that honors SAS or `TokenCredential`, scope, tenant, loading options, capabilities, and
 lifetime. Optional SAS persistence is mediated by a framework-neutral asynchronous
 `ICredentialVault` and native per-user stores; it is disabled by default and settings contain only
-an opaque random reference. The first implementation slice remains deliberately limited to the
-destructive dead-letter routing defect, regression tests, and confirmation wiring.
+an opaque random reference. The modern `TimeSpanControl` is replaced by a transactional Avalonia
+`DurationEditor`, while Core owns invariant `DurationValue` semantics. The first implementation
+slice remains deliberately limited to the destructive dead-letter routing defect, regression
+tests, and confirmation wiring.
 
 ## Technical Context
 
@@ -28,6 +30,7 @@ preferences, and an optional opaque random credential reference; optional SAS se
 in Windows Credential Manager, macOS Keychain Services, or Linux Secret Service/libsecret
 
 **Testing**: New .NET 10 xUnit test project(s) with hand-written fakes around application ports;
+Avalonia UI/layout/accessibility tests at 820 device-independent pixels and 100/150/200% scaling;
 separate opt-in live Azure acceptance tests
 
 **Target Platform**: Windows 10 22H2+ x64, macOS 13+ x64/arm64, Ubuntu 22.04+ x64 preview
@@ -103,6 +106,20 @@ No constitutional exception or unresolved `NEEDS CLARIFICATION` remains.
    supply-chain, fallback, and three-platform smoke approval.
 9. **Preview packaging**: self-contained RID artifacts are `win-x64.zip`, `osx-x64.zip`,
    `osx-arm64.zip`, and `linux-x64.tar.gz`. Development previews may be unsigned but must say so.
+10. **Duration editor**: rename/replace the modern `TimeSpanControl` with `DurationEditor`; do not
+    reuse WinForms `Popup`, `PopupComboBox`, `WndProc`, or P/Invoke code. Core owns non-negative,
+    millisecond-precision `DurationValue`, strict invariant `D.HH:MM:SS[.fff]` parsing/formatting,
+    component validation, and a separate contextual `DurationConstraint`. App owns a compact
+    primary draft field plus Edit affordance and an Avalonia Flyout/Popup with fully labelled
+    component inputs. Only Apply commits; Cancel, Escape, light-dismiss, invalid input, and focus
+    movement leave the bound value unchanged and restore focus to Edit.
+11. **Duration input/layout**: direct typing is primary. App MAY use Avalonia `NumericUpDown` inside
+    the structured editor with `ShowButtonSpinner=False` and spinning enabled for keyboard Up/Down;
+    permanent spinner arrows are prohibited. The complete maximum representation must fit or
+    scroll without hidden digits at the app minimum `MinWidth=820` and at 1.0/1.5/2.0 scaling.
+12. **Send view registration**: the missing `DataTemplate` mapping
+    `SendMessageViewModel -> SendMessageView` is a separate App composition defect assigned to the
+    send-message slice, not to `DurationEditor` work.
 
 Detailed rationale is in [research.md](research.md), models in
 [data-model.md](data-model.md), and normative desktop contracts in [contracts/](contracts/).
@@ -131,7 +148,7 @@ specs/001-safe-servicebus-mvp/
 
 ```text
 src/
-├── Core/                 # Framework-neutral records, state machines, and ports
+├── Core/                 # Framework-neutral records, DurationValue, state machines, and ports
 ├── ViewModels/           # ReactiveUI presentation state and commands
 ├── Services/             # Azure Service Bus adapters and client/context factory
 ├── App/                  # Avalonia views, composition, dialogs, settings, native vault adapters
@@ -159,11 +176,13 @@ suite so .NET 10 contracts and Avalonia behavior can run cross-platform.
    raw history defensively, add the connection-context factory and `ICredentialVault`, approve a
    native adapter implementation, and honor auth/scope/capabilities. This does not alter T001.
 3. **Core administration and messaging**: fill entity/rule lifecycle, send/receive/settlement,
-   typed outcomes, bounded retrieval, and stale-state handling.
+   typed outcomes, bounded retrieval, stale-state handling, and independently register the existing
+   `SendMessageView` DataTemplate.
 4. **Sessions and selected recovery**: ownership state machine, deferred lookup, send-before-settle
    recovery, diagnostic property treatment, and per-item outcomes.
-5. **Accessible preview and packaging**: keyboard/focus/automation semantics, duration round-trip,
-   honest service navigation, package generation, launch smoke tests, and preview guidance.
+5. **Accessible preview and packaging**: replace `TimeSpanControl` with the transactional
+   `DurationEditor`, verify keyboard/focus/automation and 820-DIP scaling layouts, preserve honest
+   service navigation, and produce package launch smoke evidence and preview guidance.
 
 Each slice ends at a human review checkpoint; tasks are produced later by `/speckit.tasks`.
 
@@ -176,6 +195,8 @@ Each slice ends at a human review checkpoint; tasks are produced later by `/spec
 | Azure SDK, identity, and optional native-vault choices are secret-safe | PASS |
 | Async/cancellation, retry boundaries, bounded retrieval, and diagnostics are explicit | PASS |
 | Safety, vault lifecycle, contract, accessibility, live Azure, and package verification trace to acceptance criteria | PASS |
+| Core duration semantics remain framework-neutral and App owns Avalonia interaction/layout | PASS |
+| Legacy Popup/PInvoke reuse is prohibited and Send DataTemplate repair remains separate | PASS |
 | Alternatives, migration impact, exclusions, and the first implementation slice are explicit | PASS |
 
 **Final design gate assessment**: PASS, subject to mandatory human review. No complexity waiver is
