@@ -37,6 +37,7 @@ public partial class DurationEditor : UserControl
         new Dictionary<string, string>();
 
     private DurationEditTransaction? _transaction;
+    private string? _boundValueError;
     private bool _synchronizing;
     private bool _applied;
 
@@ -64,16 +65,16 @@ public partial class DurationEditor : UserControl
         _synchronizing = true;
         try
         {
-            var value = DurationValue.FromTimeSpan(Value);
-            _transaction = new DurationEditTransaction(value, Constraint);
-            SynchronizeDraftControls();
-        }
-        catch (Exception exception) when (
-            exception is ArgumentException or ArgumentOutOfRangeException)
-        {
             _transaction = null;
-            PrimaryInput.Text = string.Empty;
-            PrimaryError.Text = "Duration must be non-negative and aligned to whole milliseconds.";
+            if (EnsureTransaction())
+            {
+                SynchronizeDraftControls();
+            }
+            else
+            {
+                PrimaryInput.Text = string.Empty;
+                ShowErrors();
+            }
         }
         finally
         {
@@ -103,7 +104,9 @@ public partial class DurationEditor : UserControl
 
     private void OnFlyoutOpened(object? sender, EventArgs e)
     {
-        EnsureTransaction();
+        if (!EnsureTransaction())
+            return;
+
         IsEditorOpen = true;
         _applied = false;
         SynchronizeDraftControls();
@@ -112,7 +115,9 @@ public partial class DurationEditor : UserControl
 
     private void OnEditClick(object? sender, RoutedEventArgs e)
     {
-        EnsureTransaction();
+        if (!EnsureTransaction())
+            return;
+
         IsEditorOpen = true;
         _applied = false;
         SynchronizeDraftControls();
@@ -225,25 +230,36 @@ public partial class DurationEditor : UserControl
         EditButton.Focus();
     }
 
-    private void EnsureTransaction()
+    private bool EnsureTransaction()
     {
         if (_transaction is not null)
-            return;
+            return true;
 
+        if (Value < TimeSpan.Zero)
+        {
+            _boundValueError = "Duration must be non-negative.";
+            ShowErrors();
+            return false;
+        }
+
+        // Azure represents unlimited entity durations as TimeSpan.MaxValue, whose final
+        // 5,807 ticks exceed whole-millisecond precision. Truncate only at this App
+        // boundary; DurationValue remains strict and the exact bound value is preserved
+        // unless the user explicitly applies an edit.
+        var wholeMillisecondTicks =
+            Value.Ticks - Value.Ticks % TimeSpan.TicksPerMillisecond;
         _transaction = new DurationEditTransaction(
-            DurationValue.FromTimeSpan(Value),
+            DurationValue.FromTimeSpan(TimeSpan.FromTicks(wholeMillisecondTicks)),
             Constraint);
+        _boundValueError = null;
+        return true;
     }
 
     private void Revalidate()
     {
-        if (_transaction is null)
-            return;
-
-        _transaction = new DurationEditTransaction(
-            DurationValue.FromTimeSpan(Value),
-            Constraint);
-        SynchronizeDraftControls();
+        _transaction = null;
+        if (EnsureTransaction())
+            SynchronizeDraftControls();
     }
 
     private void SynchronizeDraftControls()
@@ -282,7 +298,7 @@ public partial class DurationEditor : UserControl
             MillisecondsInput,
             MillisecondsError,
             "Whole number from 0 through 999.");
-        PrimaryError.Text = GetFieldError("Duration");
+        PrimaryError.Text = _boundValueError ?? GetFieldError("Duration");
         ContextError.Text = _transaction?.ContextError;
     }
 
@@ -303,7 +319,7 @@ public partial class DurationEditor : UserControl
         _transaction?.FieldErrors.TryGetValue(field, out var error) == true
             ? error
             : null;
-    }
+}
 
 // Temporary compatibility for T005; T006 migrates all visible form usages.
 public sealed class TimeSpanControl : DurationEditor;

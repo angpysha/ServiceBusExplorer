@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -9,6 +10,68 @@ namespace ServiceBusExplorer.UITests.Controls;
 
 public class DurationEditorInteractionTests
 {
+    [AvaloniaFact]
+    public void ProgrammaticBinding_SubMillisecondValues_InitializeAtWholeMillisecondPrecision()
+    {
+        var cases = new[]
+        {
+            (Value: TimeSpan.FromTicks(1), ExpectedText: "0.00:00:00"),
+            (Value: TimeSpan.MaxValue, ExpectedText: "10675199.02:48:05.477"),
+        };
+
+        foreach (var testCase in cases)
+        {
+            var editor = new DurationEditor
+            {
+                DataContext = new { Duration = testCase.Value },
+            };
+            editor.Bind(
+                DurationEditor.ValueProperty,
+                new Binding("Duration") { Mode = BindingMode.OneWay });
+            var window = new Window { Content = editor };
+
+            var exception = Record.Exception(window.Show);
+
+            Assert.Null(exception);
+            Assert.Equal(testCase.Value, editor.Value);
+            Assert.Equal(testCase.ExpectedText, editor.PrimaryText);
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void ProgrammaticBinding_NegativeValue_ReportsErrorWithoutEscapingTextChanged()
+    {
+        var invalid = TimeSpan.FromTicks(-1);
+        var editor = ShowEditor(invalid, out var window);
+        var primary = Required<TextBox>(editor, "PrimaryInput");
+
+        var exception = Record.Exception(() => primary.Text = "0.00:00:00");
+
+        Assert.Null(exception);
+        Assert.Equal(invalid, editor.Value);
+        Assert.Contains(
+            "non-negative",
+            Required<TextBlock>(editor, "PrimaryError").Text,
+            StringComparison.OrdinalIgnoreCase);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void Cancel_MaxValueDraft_PreservesExactExternalSentinel()
+    {
+        var editor = ShowEditor(TimeSpan.MaxValue, out var window);
+
+        Click(Required<Button>(editor, "EditButton"));
+        Required<TextBox>(editor, "DaysInput").Text = "1";
+        Click(Required<Button>(editor, "CancelButton"));
+
+        Assert.Equal(TimeSpan.MaxValue, editor.Value);
+        Assert.Equal("10675199.02:48:05.477", editor.PrimaryText);
+        Assert.Empty(editor.FieldErrors);
+        window.Close();
+    }
+
     [AvaloniaFact]
     public void Apply_IsTheOnlyActionThatCommitsComponentDrafts()
     {
