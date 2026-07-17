@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -40,6 +41,7 @@ public class DurationEditorLayoutTests
             Content = editor
         };
         window.Show();
+        AssertRenderedAtScale(window, scale);
 
         var primary = Assert.IsType<TextBox>(editor.FindControl<TextBox>("PrimaryInput"));
         Assert.Equal("10675199.02:48:05.477", primary.Text);
@@ -76,15 +78,16 @@ public class DurationEditorLayoutTests
         var popup = Assert.IsAssignableFrom<TopLevel>(TopLevel.GetTopLevel(inputs[0]));
         var visibleControls = labels.Cast<Control>().Concat(inputs).Append(apply).Append(cancel).ToArray();
         foreach (var control in visibleControls)
-            AssertInside(control, popup, scale);
+            AssertInside(control, popup);
 
-        AssertNoOverlap(inputs.Cast<Control>().Append(apply).Append(cancel), popup, scale);
+        AssertNoOverlap(inputs.Cast<Control>().Append(apply).Append(cancel), popup);
+        AssertRenderedAtScale(popup, scale);
 
         inputs[1].Text = "24";
         Dispatcher.UIThread.RunJobs();
         var error = Assert.IsType<TextBlock>(editor.FindControl<TextBlock>("HoursError"));
         Assert.False(string.IsNullOrWhiteSpace(error.Text));
-        AssertInside(error, popup, scale);
+        AssertInside(error, popup);
 
         flyout.Hide();
         window.Close();
@@ -122,6 +125,7 @@ public class DurationEditorLayoutTests
         window.Styles.Add(numericStyle);
         window.Show();
         Dispatcher.UIThread.RunJobs();
+        AssertRenderedAtScale(window, scale);
 
         Assert.True(input.Bounds.Width >= 144, $"Numeric input is only {input.Bounds.Width:F1} DIPs wide.");
         var textBox = Assert.Single(input.GetVisualDescendants().OfType<TextBox>());
@@ -131,7 +135,7 @@ public class DurationEditorLayoutTests
         Assert.Equal(2, buttons.Length);
         var visibleControls = buttons.Prepend(textBox).ToArray();
         foreach (var control in visibleControls)
-            AssertInside(control, window, scale);
+            AssertInside(control, window);
         var buttonBounds = buttons
             .Select(
                 button =>
@@ -150,22 +154,21 @@ public class DurationEditorLayoutTests
         window.Close();
     }
 
-    private static void AssertInside(Control control, TopLevel topLevel, double scale)
+    private static void AssertInside(Control control, TopLevel topLevel)
     {
         var origin = control.TranslatePoint(default, topLevel);
         Assert.True(origin.HasValue, $"{control.Name} could not be located in its top level.");
 
-        var bounds = ToScaledRect(new Rect(origin.Value, control.Bounds.Size), scale);
-        var viewport = ToScaledRect(new Rect(topLevel.ClientSize), scale);
+        var bounds = new Rect(origin.Value, control.Bounds.Size);
+        var viewport = new Rect(topLevel.ClientSize);
         Assert.True(
             viewport.Contains(bounds),
-            $"{control.Name} bounds {bounds} exceed viewport {viewport} at {scale:P0}.");
+            $"{control.Name} bounds {bounds} exceed viewport {viewport}.");
     }
 
     private static void AssertNoOverlap(
         IEnumerable<Control> controls,
-        TopLevel topLevel,
-        double scale)
+        TopLevel topLevel)
     {
         var rectangles = controls
             .Select(
@@ -173,7 +176,7 @@ public class DurationEditorLayoutTests
                 {
                     var origin = control.TranslatePoint(default, topLevel)
                         ?? throw new InvalidOperationException($"{control.Name} has no top-level position.");
-                    return (control.Name, Bounds: ToScaledRect(new Rect(origin, control.Bounds.Size), scale));
+                    return (control.Name, Bounds: new Rect(origin, control.Bounds.Size));
                 })
             .ToArray();
 
@@ -183,17 +186,22 @@ public class DurationEditorLayoutTests
             {
                 Assert.False(
                     rectangles[first].Bounds.Intersects(rectangles[second].Bounds),
-                    $"{rectangles[first].Name} overlaps {rectangles[second].Name} at {scale:P0}.");
+                    $"{rectangles[first].Name} overlaps {rectangles[second].Name}.");
             }
         }
     }
 
-    private static Rect ToScaledRect(Rect bounds, double scale)
+    private static void AssertRenderedAtScale(Control control, double scale)
     {
-        var left = Math.Floor(bounds.Left * scale);
-        var top = Math.Floor(bounds.Top * scale);
-        var right = Math.Ceiling(bounds.Right * scale);
-        var bottom = Math.Ceiling(bounds.Bottom * scale);
-        return new Rect(left, top, right - left, bottom - top);
+        var pixelSize = new PixelSize(
+            (int)Math.Ceiling(control.Bounds.Width * scale),
+            (int)Math.Ceiling(control.Bounds.Height * scale));
+        using var bitmap = new RenderTargetBitmap(
+            pixelSize,
+            new Vector(96 * scale, 96 * scale));
+
+        bitmap.Render(control);
+
+        Assert.Equal(pixelSize, bitmap.PixelSize);
     }
 }

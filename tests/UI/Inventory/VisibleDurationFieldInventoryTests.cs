@@ -25,7 +25,7 @@ public class VisibleDurationFieldInventoryTests
         { "Subscriptions/SubscriptionDetailView.axaml", "MaxDeliveryCount", 1, "1", "2000", "1", "Max delivery count", "Max delivery count" },
         { "Subscriptions/SubscriptionDetailView.axaml", "PeekCount", 2, "1", "1000", "1", "Messages to peek", "Messages to peek" },
         { "Topics/TopicDetailView.axaml", "MaxSizeInMegabytes", 1, "1", "81920", "1", "Maximum topic size in megabytes", "Maximum topic size (MB)" },
-        { "Queues/SendMessageView.axaml", "SendCount", 1, "1", "1000", "1", "Message count", "Message count" }
+        { "Queues/SendMessageView.axaml", "SendCount", 1, "1", "1000", "1", "Message count", "Message count *" }
     };
 
     [Theory]
