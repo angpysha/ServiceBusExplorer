@@ -8,6 +8,7 @@ namespace ServiceBusExplorer.ViewModels;
 public class QueueListViewModel : ReactiveObject
 {
     private readonly IQueueService _svc;
+    private readonly IConfirmationService _confirmationService;
     private readonly SourceList<QueueInfo> _source = new();
     private bool _isLoading;
     private string? _error;
@@ -61,9 +62,10 @@ public class QueueListViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> CancelCreateCommand { get; }
     public ReactiveCommand<Unit, Unit> QuickCreateCommand { get; }
 
-    public QueueListViewModel(IQueueService svc)
+    public QueueListViewModel(IQueueService svc, IConfirmationService confirmationService)
     {
         _svc = svc;
+        _confirmationService = confirmationService;
 
         _source.Connect()
             .Bind(out var bound)
@@ -73,7 +75,9 @@ public class QueueListViewModel : ReactiveObject
         this.WhenAnyValue(x => x.SelectedQueue)
             .Subscribe(q =>
             {
-                var detail = q == null ? null : new QueueDetailViewModel(_svc, q.Name);
+                var detail = q == null
+                    ? null
+                    : new QueueDetailViewModel(_svc, _confirmationService, q.Name);
                 if (detail != null)
                     detail.NavigateBackRequested.Subscribe(_ => SelectedQueue = null);
                 SelectedDetail = detail;

@@ -82,17 +82,14 @@ public class QueueService : IQueueService
     public async Task DeleteAsync(string name, CancellationToken ct = default) =>
         await _admin.DeleteQueueAsync(name, ct);
 
-    public async Task<IReadOnlyList<ReceivedMessage>> PeekAsync(string name, int maxCount,
-        MessageSubQueue sub = MessageSubQueue.None, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ReceivedMessage>> PeekAsync(
+        string name,
+        int maxCount,
+        MessageSource source,
+        CancellationToken ct = default)
     {
-        var subQueue = sub switch
-        {
-            MessageSubQueue.DeadLetter => SubQueue.DeadLetter,
-            MessageSubQueue.TransferDeadLetter => SubQueue.TransferDeadLetter,
-            _ => SubQueue.None
-        };
         await using var receiver = _client.CreateReceiver(name,
-            new ServiceBusReceiverOptions { SubQueue = subQueue });
+            new ServiceBusReceiverOptions { SubQueue = MessageSourceMapper.Map(source) });
         var messages = await receiver.PeekMessagesAsync(maxCount, cancellationToken: ct);
         return messages.Select(MapMessage).ToList();
     }
@@ -116,19 +113,15 @@ public class QueueService : IQueueService
         await sender.SendMessageAsync(msg, ct);
     }
 
-    public async Task PurgeAsync(string name, MessageSubQueue sub = MessageSubQueue.None,
+    public async Task PurgeAsync(
+        string name,
+        MessageSource source,
         CancellationToken ct = default)
     {
-        var subQueue = sub switch
-        {
-            MessageSubQueue.DeadLetter => SubQueue.DeadLetter,
-            MessageSubQueue.TransferDeadLetter => SubQueue.TransferDeadLetter,
-            _ => SubQueue.None
-        };
         await using var receiver = _client.CreateReceiver(name,
             new ServiceBusReceiverOptions
             {
-                SubQueue = subQueue,
+                SubQueue = MessageSourceMapper.Map(source),
                 ReceiveMode = ServiceBusReceiveMode.ReceiveAndDelete
             });
         while (!ct.IsCancellationRequested)
@@ -138,17 +131,13 @@ public class QueueService : IQueueService
         }
     }
 
-    public Task<IReceiveSession> OpenReceiveSessionAsync(string name,
-        MessageSubQueue sub = MessageSubQueue.None, CancellationToken ct = default)
+    public Task<IReceiveSession> OpenReceiveSessionAsync(
+        string name,
+        MessageSource source,
+        CancellationToken ct = default)
     {
-        var subQueue = sub switch
-        {
-            MessageSubQueue.DeadLetter => SubQueue.DeadLetter,
-            MessageSubQueue.TransferDeadLetter => SubQueue.TransferDeadLetter,
-            _ => SubQueue.None
-        };
         var receiver = _client.CreateReceiver(name,
-            new ServiceBusReceiverOptions { SubQueue = subQueue });
+            new ServiceBusReceiverOptions { SubQueue = MessageSourceMapper.Map(source) });
         return Task.FromResult<IReceiveSession>(new ReceiveSession(receiver));
     }
 

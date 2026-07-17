@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ServiceBusExplorer.App.Views.Dialogs.ConfirmationDialog"
+        Title="Confirm destructive operation"
+        Width="520"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="24" Spacing="14">
+    <TextBlock Text="Confirm destructive operation"
+               FontSize="20"
+               FontWeight="SemiBold"
+               AutomationProperties.Name="Destructive operation confirmation" />
+    <TextBlock x:Name="TargetText"
+               TextWrapping="Wrap"
+               AutomationProperties.Name="Affected target and source" />
+    <TextBlock x:Name="ConsequenceText"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+               AutomationProperties.Name="Irreversible consequence" />
+    <StackPanel Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="10">
+      <Button x:Name="CancelButton"
+              Content="Cancel"
+              IsDefault="True"
+              IsCancel="True"
+              Click="OnCancel"
+              AutomationProperties.Name="Cancel purge" />
+      <Button Content="Purge"
+              Click="OnConfirm"
+              AutomationProperties.Name="Confirm irreversible purge" />
+    </StackPanel>
+  </StackPanel>
+</Window>

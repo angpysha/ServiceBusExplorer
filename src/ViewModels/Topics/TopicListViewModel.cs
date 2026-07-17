@@ -10,6 +10,7 @@ public class TopicListViewModel : ReactiveObject
     private readonly ITopicService _svc;
     private readonly ISubscriptionService _subSvc;
     private readonly IQueueService _queueSvc;
+    private readonly IConfirmationService _confirmationService;
     private readonly SourceList<TopicInfo> _source = new();
     private bool _isLoading;
     private string? _error;
@@ -63,11 +64,16 @@ public class TopicListViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> CancelCreateCommand { get; }
     public ReactiveCommand<Unit, Unit> QuickCreateCommand { get; }
 
-    public TopicListViewModel(ITopicService svc, ISubscriptionService subSvc, IQueueService queueSvc)
+    public TopicListViewModel(
+        ITopicService svc,
+        ISubscriptionService subSvc,
+        IQueueService queueSvc,
+        IConfirmationService confirmationService)
     {
         _svc = svc;
         _subSvc = subSvc;
         _queueSvc = queueSvc;
+        _confirmationService = confirmationService;
 
         _source.Connect()
             .Bind(out var bound)
@@ -77,7 +83,14 @@ public class TopicListViewModel : ReactiveObject
         this.WhenAnyValue(x => x.SelectedTopic)
             .Subscribe(t =>
             {
-                var detail = t == null ? null : new TopicDetailViewModel(_svc, _subSvc, _queueSvc, t.Name);
+                var detail = t == null
+                    ? null
+                    : new TopicDetailViewModel(
+                        _svc,
+                        _subSvc,
+                        _queueSvc,
+                        _confirmationService,
+                        t.Name);
                 if (detail != null)
                     detail.NavigateBackRequested.Subscribe(_ => SelectedTopic = null);
                 SelectedDetail = detail;

@@ -2,6 +2,7 @@ using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ServiceBusExplorer.App.Services;
 using ServiceBusExplorer.Services;
 using ServiceBusExplorer.ViewModels;
 
@@ -10,6 +11,7 @@ namespace ServiceBusExplorer.App;
 public class AppBootstrapper : IDisposable
 {
     private readonly IServiceProvider _appServices;
+    private readonly IConfirmationService _confirmationService = new AvaloniaConfirmationService();
     private IServiceProvider? _connectionServices;
 
     public readonly SettingsService Settings = new();
@@ -20,6 +22,7 @@ public class AppBootstrapper : IDisposable
         var sc = new ServiceCollection();
         sc.AddLogging(b => { b.AddConsole(); b.AddProvider(LogSink); });
         sc.AddSingleton(Settings);
+        sc.AddSingleton(_confirmationService);
         sc.AddTransient<ConnectViewModel>();
         _appServices = sc.BuildServiceProvider();
     }
@@ -31,6 +34,7 @@ public class AppBootstrapper : IDisposable
     {
         var sc = new ServiceCollection();
         sc.AddLogging(b => { b.AddConsole(); b.AddProvider(LogSink); });
+        sc.AddSingleton(_confirmationService);
 
         sc.AddSingleton(_ => new ServiceBusAdministrationClient(opts.ConnectionString));
         sc.AddSingleton(_ => new ServiceBusClient(opts.ConnectionString));

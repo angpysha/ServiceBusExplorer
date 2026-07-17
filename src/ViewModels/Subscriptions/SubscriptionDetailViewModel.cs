@@ -10,6 +10,7 @@ public class SubscriptionDetailViewModel : ReactiveObject
 {
     private readonly ISubscriptionService _subSvc;
     private readonly IQueueService _queueSvc;
+    private readonly IConfirmationService _confirmationService;
     private readonly string _entityPath;
     private readonly string _topicName;
     private readonly string _subscriptionName;
@@ -20,7 +21,7 @@ public class SubscriptionDetailViewModel : ReactiveObject
     private string? _error;
     private ReceivedMessage? _selectedMessage;
     private int _peekCount = 20;
-    private MessageSubQueue _selectedSubQueue = MessageSubQueue.None;
+    private MessageSource? _selectedSource;
     private bool _showSendPanel;
     private bool _isReceiveMode;
     private IReceiveSession? _activeSession;
@@ -72,10 +73,10 @@ public class SubscriptionDetailViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _peekCount, value);
     }
 
-    public MessageSubQueue SelectedSubQueue
+    public MessageSource? SelectedSource
     {
-        get => _selectedSubQueue;
-        set => this.RaiseAndSetIfChanged(ref _selectedSubQueue, value);
+        get => _selectedSource;
+        set => this.RaiseAndSetIfChanged(ref _selectedSource, value);
     }
 
     public bool ShowSendPanel
@@ -146,8 +147,8 @@ public class SubscriptionDetailViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _saveError, value);
     }
 
-    public static IReadOnlyList<MessageSubQueue> SubQueueOptions { get; } =
-        new[] { MessageSubQueue.None, MessageSubQueue.DeadLetter, MessageSubQueue.TransferDeadLetter };
+    public static IReadOnlyList<MessageSource> SourceOptions { get; } =
+        Enum.GetValues<MessageSource>();
 
     public ReadOnlyObservableCollection<ReceivedMessage> Messages { get; }
     public RuleListViewModel Rules { get; }
@@ -170,11 +171,13 @@ public class SubscriptionDetailViewModel : ReactiveObject
     public SubscriptionDetailViewModel(
         ISubscriptionService subSvc,
         IQueueService queueSvc,
+        IConfirmationService confirmationService,
         string topicName,
         string subscriptionName)
     {
         _subSvc = subSvc;
         _queueSvc = queueSvc;
+        _confirmationService = confirmationService;
         _topicName = topicName;
         _subscriptionName = subscriptionName;
         _entityPath = $"{topicName}/Subscriptions/{subscriptionName}";
@@ -212,7 +215,13 @@ public class SubscriptionDetailViewModel : ReactiveObject
             Error = null;
             try
             {
-                var msgs = await queueSvc.PeekAsync(_entityPath, PeekCount, SelectedSubQueue);
+                if (SelectedSource is not { } source)
+                {
+                    Error = "Select a message source before peeking.";
+                    return;
+                }
+
+                var msgs = await queueSvc.PeekAsync(_entityPath, PeekCount, source);
                 _messageSource.Edit(list => { list.Clear(); list.AddRange(msgs); });
             }
             catch (Exception ex)
@@ -227,11 +236,26 @@ public class SubscriptionDetailViewModel : ReactiveObject
 
         PurgeCommand = ReactiveCommand.CreateFromTask(async () =>
         {
+            if (SelectedSource is not { } source)
+            {
+                Error = "Select a message source before purging.";
+                return;
+            }
+
+            var confirmation = await _confirmationService.ConfirmAsync(
+                new ConfirmationRequest(
+                    _entityPath,
+                    source,
+                    "All messages in this source will be permanently removed.",
+                    ConfirmationRisk.Irreversible));
+            if (confirmation != ConfirmationResult.Confirmed)
+                return;
+
             IsLoading = true;
             Error = null;
             try
             {
-                await queueSvc.PurgeAsync(_entityPath, SelectedSubQueue);
+                await queueSvc.PurgeAsync(_entityPath, source);
                 _messageSource.Clear();
             }
             catch (Exception ex)
@@ -284,7 +308,13 @@ public class SubscriptionDetailViewModel : ReactiveObject
             Error = null;
             try
             {
-                _activeSession = await queueSvc.OpenReceiveSessionAsync(_entityPath, SelectedSubQueue);
+                if (SelectedSource is not { } source)
+                {
+                    Error = "Select a message source before receiving.";
+                    return;
+                }
+
+                _activeSession = await queueSvc.OpenReceiveSessionAsync(_entityPath, source);
                 _messageSource.Clear();
                 IsReceiveMode = true;
             }

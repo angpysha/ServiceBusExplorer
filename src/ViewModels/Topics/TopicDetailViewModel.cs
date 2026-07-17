@@ -7,6 +7,7 @@ namespace ServiceBusExplorer.ViewModels;
 public class TopicDetailViewModel : ReactiveObject
 {
     private readonly ITopicService _topicSvc;
+    private readonly IConfirmationService _confirmationService;
     private readonly string _topicName;
     private readonly Subject<Unit> _navigateBack = new();
     private TopicInfo? _topic;
@@ -107,9 +108,11 @@ public class TopicDetailViewModel : ReactiveObject
         ITopicService topicSvc,
         ISubscriptionService subscriptionSvc,
         IQueueService queueSvc,
+        IConfirmationService confirmationService,
         string topicName)
     {
         _topicSvc = topicSvc;
+        _confirmationService = confirmationService;
         _topicName = topicName;
         Subscriptions = new SubscriptionListViewModel(subscriptionSvc, topicName);
         Send = new SendMessageViewModel(queueSvc, topicName);
@@ -122,7 +125,12 @@ public class TopicDetailViewModel : ReactiveObject
             {
                 var detail = sub == null
                     ? null
-                    : new SubscriptionDetailViewModel(subscriptionSvc, queueSvc, topicName, sub.Name);
+                    : new SubscriptionDetailViewModel(
+                        subscriptionSvc,
+                        queueSvc,
+                        _confirmationService,
+                        topicName,
+                        sub.Name);
                 if (detail != null)
                     detail.NavigateBackRequested.Subscribe(_ => Subscriptions.SelectedSubscription = null);
                 SelectedSubscriptionDetail = detail;

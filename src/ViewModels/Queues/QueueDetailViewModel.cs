@@ -9,6 +9,7 @@ namespace ServiceBusExplorer.ViewModels;
 public class QueueDetailViewModel : ReactiveObject
 {
     private readonly IQueueService _svc;
+    private readonly IConfirmationService _confirmationService;
     private readonly string _queueName;
     private readonly Subject<Unit> _navigateBack = new();
     private readonly SourceList<ReceivedMessage> _messageSource = new();
@@ -17,7 +18,7 @@ public class QueueDetailViewModel : ReactiveObject
     private string? _error;
     private ReceivedMessage? _selectedMessage;
     private int _peekCount = 20;
-    private MessageSubQueue _selectedSubQueue = MessageSubQueue.None;
+    private MessageSource? _selectedSource;
     private bool _showSendPanel;
     private bool _isReceiveMode;
     private IReceiveSession? _activeSession;
@@ -69,10 +70,10 @@ public class QueueDetailViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _peekCount, value);
     }
 
-    public MessageSubQueue SelectedSubQueue
+    public MessageSource? SelectedSource
     {
-        get => _selectedSubQueue;
-        set => this.RaiseAndSetIfChanged(ref _selectedSubQueue, value);
+        get => _selectedSource;
+        set => this.RaiseAndSetIfChanged(ref _selectedSource, value);
     }
 
     public bool ShowSendPanel
@@ -143,8 +144,8 @@ public class QueueDetailViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _saveError, value);
     }
 
-    public static IReadOnlyList<MessageSubQueue> SubQueueOptions { get; } =
-        new[] { MessageSubQueue.None, MessageSubQueue.DeadLetter, MessageSubQueue.TransferDeadLetter };
+    public static IReadOnlyList<MessageSource> SourceOptions { get; } =
+        Enum.GetValues<MessageSource>();
 
     public ReadOnlyObservableCollection<ReceivedMessage> Messages { get; }
     public SendMessageViewModel Send { get; }
@@ -163,9 +164,13 @@ public class QueueDetailViewModel : ReactiveObject
     public ReactiveCommand<ReceivedMessage, Unit> AbandonCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> DeadLetterCommand { get; }
 
-    public QueueDetailViewModel(IQueueService svc, string queueName)
+    public QueueDetailViewModel(
+        IQueueService svc,
+        IConfirmationService confirmationService,
+        string queueName)
     {
         _svc = svc;
+        _confirmationService = confirmationService;
         _queueName = queueName;
 
         _messageSource.Connect().Bind(out var bound).Subscribe();
@@ -200,7 +205,13 @@ public class QueueDetailViewModel : ReactiveObject
             Error = null;
             try
             {
-                var msgs = await _svc.PeekAsync(_queueName, PeekCount, SelectedSubQueue);
+                if (SelectedSource is not { } source)
+                {
+                    Error = "Select a message source before peeking.";
+                    return;
+                }
+
+                var msgs = await _svc.PeekAsync(_queueName, PeekCount, source);
                 _messageSource.Edit(list => { list.Clear(); list.AddRange(msgs); });
             }
             catch (Exception ex)
@@ -215,11 +226,26 @@ public class QueueDetailViewModel : ReactiveObject
 
         PurgeCommand = ReactiveCommand.CreateFromTask(async () =>
         {
+            if (SelectedSource is not { } source)
+            {
+                Error = "Select a message source before purging.";
+                return;
+            }
+
+            var confirmation = await _confirmationService.ConfirmAsync(
+                new ConfirmationRequest(
+                    _queueName,
+                    source,
+                    "All messages in this source will be permanently removed.",
+                    ConfirmationRisk.Irreversible));
+            if (confirmation != ConfirmationResult.Confirmed)
+                return;
+
             IsLoading = true;
             Error = null;
             try
             {
-                await _svc.PurgeAsync(_queueName, SelectedSubQueue);
+                await _svc.PurgeAsync(_queueName, source);
                 _messageSource.Clear();
             }
             catch (Exception ex)
@@ -272,7 +298,13 @@ public class QueueDetailViewModel : ReactiveObject
             Error = null;
             try
             {
-                _activeSession = await _svc.OpenReceiveSessionAsync(_queueName, SelectedSubQueue);
+                if (SelectedSource is not { } source)
+                {
+                    Error = "Select a message source before receiving.";
+                    return;
+                }
+
+                _activeSession = await _svc.OpenReceiveSessionAsync(_queueName, source);
                 _messageSource.Clear();
                 IsReceiveMode = true;
             }
