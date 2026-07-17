@@ -67,16 +67,25 @@
             <Grid ColumnDefinitions="180,*"
                   RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
               <TextBlock Grid.Row="0" Grid.Column="0" Text="Lock Duration" VerticalAlignment="Center" Margin="0,0,12,8" />
-              <ctrl:TimeSpanControl Grid.Row="0" Grid.Column="1" Value="{Binding LockDuration}" Margin="0,0,0,8" />
+              <ctrl:DurationEditor Grid.Row="0" Grid.Column="1"
+                                   Value="{Binding LockDuration}"
+                                   Constraint="{x:Static domain:DurationConstraint.LockDuration}"
+                                   Margin="0,0,0,8" />
 
               <TextBlock Grid.Row="1" Grid.Column="0" Text="Max Delivery Count" VerticalAlignment="Center" Margin="0,0,12,8" />
               <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding MaxDeliveryCount}" Minimum="1" Maximum="2000" Width="120" HorizontalAlignment="Left" Margin="0,0,0,8" />
 
               <TextBlock Grid.Row="2" Grid.Column="0" Text="Message TTL" VerticalAlignment="Center" Margin="0,0,12,8" />
-              <ctrl:TimeSpanControl Grid.Row="2" Grid.Column="1" Value="{Binding DefaultMessageTimeToLive}" Margin="0,0,0,8" />
+              <ctrl:DurationEditor Grid.Row="2" Grid.Column="1"
+                                   Value="{Binding DefaultMessageTimeToLive}"
+                                   Constraint="{x:Static domain:DurationConstraint.DefaultMessageTimeToLive}"
+                                   Margin="0,0,0,8" />
 
               <TextBlock Grid.Row="3" Grid.Column="0" Text="Auto-delete on Idle" VerticalAlignment="Center" Margin="0,0,12,8" />
-              <ctrl:TimeSpanControl Grid.Row="3" Grid.Column="1" Value="{Binding AutoDeleteOnIdle}" Margin="0,0,0,8" />
+              <ctrl:DurationEditor Grid.Row="3" Grid.Column="1"
+                                   Value="{Binding AutoDeleteOnIdle}"
+                                   Constraint="{x:Static domain:DurationConstraint.AutoDeleteOnIdle}"
+                                   Margin="0,0,0,8" />
 
               <TextBlock Grid.Row="4" Grid.Column="0" Text="Batched Operations" VerticalAlignment="Center" Margin="0,0,12,8" />
               <CheckBox Grid.Row="4" Grid.Column="1" IsChecked="{Binding EnableBatchedOperations}" Margin="0,0,0,8" />

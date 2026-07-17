@@ -21,7 +21,7 @@
             AutomationProperties.Name="Edit duration"
             AutomationProperties.HelpText="Open the structured duration editor.">
       <Button.Flyout>
-        <Flyout Placement="Bottom"
+        <Flyout Placement="LeftEdgeAlignedTop"
                 Opened="OnFlyoutOpened"
                 Closed="OnFlyoutClosed">
           <Border Padding="16"
@@ -34,7 +34,8 @@
               <TextBlock Text="Use direct typing or Up/Down to change a component. Only Apply commits the value."
                          TextWrapping="Wrap"
                          FontSize="11" />
-              <WrapPanel Orientation="Horizontal">
+              <WrapPanel Orientation="Horizontal"
+                         MaxWidth="328">
                 <StackPanel Width="126" Margin="0,0,8,8">
                   <TextBlock x:Name="DaysLabel" Text="Days" />
                   <TextBox x:Name="DaysInput"
@@ -106,7 +107,7 @@
                          TextWrapping="Wrap"
                          AutomationProperties.Name="Duration property validation" />
               <StackPanel Orientation="Horizontal"
-                          HorizontalAlignment="Right"
+                          HorizontalAlignment="Left"
                           Spacing="8">
                 <Button x:Name="ApplyButton"
                         TabIndex="7"
