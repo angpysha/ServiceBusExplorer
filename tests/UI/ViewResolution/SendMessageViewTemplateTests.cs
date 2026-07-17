@@ -37,6 +37,8 @@ public class SendMessageViewTemplateTests
         Assert.Contains("DestinationDescription", xaml);
         Assert.Contains("AutomationProperties.Name=\"Actual publish destination\"", xaml);
         Assert.Contains("Outcome", xaml);
+        Assert.Contains("AutomationProperties.LiveSetting=\"Assertive\"", xaml);
+        Assert.Contains("AutomationProperties.LiveSetting=\"Polite\"", xaml);
     }
 
     [Theory]

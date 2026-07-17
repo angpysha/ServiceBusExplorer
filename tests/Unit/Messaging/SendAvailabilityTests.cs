@@ -122,6 +122,49 @@ public class SendAvailabilityTests
         Assert.InRange(scheduled.Value, earliest, DateTimeOffset.Now.AddSeconds(91));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1001)]
+    public async Task Send_WhenMessageCountIsOutsideComposerRange_BlocksSubmission(int count)
+    {
+        var service = new RecordingQueueService();
+        var viewModel = new SendMessageViewModel(
+            service,
+            new SendTargetContext(SendTargetKind.Queue, "orders", "orders"))
+        {
+            Body = "draft",
+            SendCount = count
+        };
+
+        await viewModel.SendCommand.Execute().ToTask();
+
+        Assert.Empty(service.SendCalls);
+        Assert.Equal("draft", viewModel.Body);
+        Assert.Contains("Message count must be between 1 and 1000", viewModel.Error);
+    }
+
+    [Theory]
+    [InlineData(59999)]
+    [InlineData(604800001)]
+    public async Task Send_WhenScheduleDelayIsOutsideComposerRange_BlocksSubmission(long milliseconds)
+    {
+        var service = new RecordingQueueService();
+        var viewModel = new SendMessageViewModel(
+            service,
+            new SendTargetContext(SendTargetKind.Queue, "orders", "orders"))
+        {
+            Body = "scheduled draft",
+            UseScheduledTime = true,
+            ScheduleDelay = TimeSpan.FromMilliseconds(milliseconds)
+        };
+
+        await viewModel.SendCommand.Execute().ToTask();
+
+        Assert.Empty(service.SendCalls);
+        Assert.Equal("scheduled draft", viewModel.Body);
+        Assert.Contains("Schedule delay", viewModel.Error);
+    }
+
     private sealed class RecordingQueueService : IQueueService
     {
         public List<(string EntityPath, OutboundMessage Message)> SendCalls { get; } = [];

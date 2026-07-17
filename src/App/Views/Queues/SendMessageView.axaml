@@ -158,12 +158,14 @@
                  IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                  Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
                  TextWrapping="Wrap"
-                 AutomationProperties.Name="Send error" />
+                 AutomationProperties.Name="Send error"
+                 AutomationProperties.LiveSetting="Assertive" />
       <TextBlock Text="{Binding Outcome}"
                  IsVisible="{Binding Outcome, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                  Foreground="#107C10"
                  TextWrapping="Wrap"
-                 AutomationProperties.Name="Send outcome" />
+                 AutomationProperties.Name="Send outcome"
+                 AutomationProperties.LiveSetting="Polite" />
       <Button Content="Send" Command="{Binding SendCommand}" HorizontalAlignment="Stretch" />
     </StackPanel>
   </Grid>

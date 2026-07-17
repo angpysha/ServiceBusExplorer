@@ -129,7 +129,10 @@ delivery consequences.
   and the scheduling toggle are optional.
 - An empty body is a validation failure and remains in the composer. Application properties remain
   a JSON object. Schedule delay uses `D.HH:MM:SS[.fff]` and retains the current one-minute through
-  seven-day composer range.
+  seven-day composer range. Message count remains 1 through 1000. The send boundary validates both
+  ranges and does not silently clamp or coerce values that bypass visual input constraints.
+- Send validation errors are assertive live announcements; successful outcomes are polite live
+  announcements.
 - The first-internal composer does not expose subject/label, partition key, reply/reply-session
   fields, absolute scheduling, or message TTL. The page states this limitation; these properties
   remain deferred to the richer messaging task rather than appearing as disabled or non-functional

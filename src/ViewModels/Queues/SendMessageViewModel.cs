@@ -119,6 +119,32 @@ public class SendMessageViewModel : ReactiveObject
                     return;
                 }
 
+                if (SendCount is < 1 or > 1000)
+                {
+                    Error = $"{Target.FailurePrefix}: Message count must be between 1 and 1000.";
+                    return;
+                }
+
+                if (UseScheduledTime)
+                {
+                    DurationValue scheduleDelay;
+                    try
+                    {
+                        scheduleDelay = DurationValue.FromTimeSpan(ScheduleDelay);
+                    }
+                    catch (ArgumentException)
+                    {
+                        Error = $"{Target.FailurePrefix}: Schedule delay must be a non-negative whole-millisecond duration.";
+                        return;
+                    }
+
+                    if (DurationConstraint.ScheduledEnqueueDelay.Validate(scheduleDelay) is { } validationError)
+                    {
+                        Error = $"{Target.FailurePrefix}: {validationError}";
+                        return;
+                    }
+                }
+
                 IReadOnlyDictionary<string, object>? props = null;
                 if (!string.IsNullOrWhiteSpace(PropertiesJson))
                 {
@@ -145,11 +171,10 @@ public class SendMessageViewModel : ReactiveObject
                         ? DateTimeOffset.Now.Add(ScheduleDelay)
                         : null);
 
-                var count = Math.Max(1, SendCount);
-                for (var i = 0; i < count; i++)
+                for (var i = 0; i < SendCount; i++)
                 {
                     await svc.SendAsync(Target.ActualDestinationPath, baseMsg);
-                    if (i < count - 1)
+                    if (i < SendCount - 1)
                         await Task.Delay(50); // brief pause between batch sends
                 }
                 Body = "";
