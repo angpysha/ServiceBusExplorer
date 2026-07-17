@@ -35,6 +35,40 @@ It is strongly recommended to set `Configuration File for Settings and Connectio
 >
 > Do not overwite the new configuration file with the old file since the `runtime` section in the new must file not be modified. 
 
+## First internal macOS build
+
+The Avalonia first-internal build is a development/test-only artifact for macOS 13 or later. It
+has incomplete feature parity, requires SAS re-entry for every connection, and is separate from
+the final cross-platform preview packaging gate.
+
+On a macOS host, create the native-architecture DMG with:
+
+```bash
+./scripts/package-macos-internal.sh
+```
+
+The script publishes a self-contained app, uses an existing Developer ID Application identity
+when one is already available, verifies the bundle and mounted image, performs a bounded launch
+smoke test, and writes the DMG plus SHA-256 sidecar under `artifacts/macos-internal/`. It does not
+perform notarization.
+
+To install, open the DMG and drag **Service Bus Explorer** to **Applications**. Check Gatekeeper
+status before launch:
+
+```bash
+spctl --assess --type execute --verbose=4 "/Applications/Service Bus Explorer.app"
+open "/Applications/Service Bus Explorer.app"
+```
+
+An unnotarized internal build may be blocked even when its code signature is valid. After verifying
+the DMG checksum and source, use Finder's **Open** context-menu action. If macOS still blocks the
+known internal artifact, remove quarantine explicitly and open it again:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Service Bus Explorer.app"
+open "/Applications/Service Bus Explorer.app"
+```
+
 ## Using [Chocolatey](https://chocolatey.org/install)
 
 ### Installing for the first time
