@@ -147,6 +147,13 @@ No constitutional exception or unresolved `NEEDS CLARIFICATION` remains.
     development publish. It must display an **Internal development build** label, revision, and
     limitations. This is not evidence for final RID packaging, signing, native-vault, or preview
     release gates.
+17. **Universal numeric-input boundary**: `DurationEditor` is the universal reusable control for
+    whole-millisecond durations and receives a contextual `DurationConstraint` for each property.
+    Relative Send scheduling moves from integer minutes to that duration model. Counts and sizes
+    remain `NumericUpDown` values and share one App-level presentation pattern with adequate width,
+    integer formatting, visible spinner controls, explicit per-field limits/increments, labels, and
+    automation help. Iconic add actions are not steppers and receive action-specific automation
+    names rather than numeric behavior.
 
 Detailed rationale is in [research.md](research.md), models in
 [data-model.md](data-model.md), and normative desktop contracts in [contracts/](contracts/).

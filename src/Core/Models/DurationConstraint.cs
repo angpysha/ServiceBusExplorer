@@ -31,6 +31,14 @@ public sealed record DurationConstraint(
         nameof(AutoDeleteOnIdle),
         DurationValue.Create(0, 0, 5, 0, 0));
 
+    /// <summary>
+    /// Gets the current Send composer constraint for a relative scheduled-enqueue delay.
+    /// </summary>
+    public static DurationConstraint ScheduledEnqueueDelay { get; } = new(
+        "Schedule delay",
+        DurationValue.Create(0, 0, 1, 0, 0),
+        DurationValue.Create(7, 0, 0, 0, 0));
+
     public string? Validate(DurationValue value)
     {
         if (Minimum is { } minimum && value.TotalMilliseconds < minimum.TotalMilliseconds)

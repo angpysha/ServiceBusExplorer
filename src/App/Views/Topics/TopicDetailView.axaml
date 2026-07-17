@@ -79,8 +79,15 @@
                                    Constraint="{x:Static domain:DurationConstraint.AutoDeleteOnIdle}"
                                    Margin="0,0,0,8" />
 
-              <TextBlock Grid.Row="2" Grid.Column="0" Text="Max Size (MB)" VerticalAlignment="Center" Margin="0,0,12,8" />
-              <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding MaxSizeInMegabytes}" Minimum="1" Maximum="81920" Width="120" HorizontalAlignment="Left" Margin="0,0,0,8" />
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="Maximum topic size (MB)" VerticalAlignment="Center" Margin="0,0,12,8" />
+              <NumericUpDown Grid.Row="2" Grid.Column="1"
+                             Value="{Binding MaxSizeInMegabytes}"
+                             Minimum="1"
+                             Maximum="81920"
+                             Increment="1"
+                             AutomationProperties.Name="Maximum topic size in megabytes"
+                             AutomationProperties.HelpText="Maximum storage allocated to the topic, in megabytes."
+                             Margin="0,0,0,8" />
 
               <TextBlock Grid.Row="3" Grid.Column="0" Text="Batched Operations" VerticalAlignment="Center" Margin="0,0,12,8" />
               <CheckBox Grid.Row="3" Grid.Column="1" IsChecked="{Binding EnableBatchedOperations}" Margin="0,0,0,8" />
@@ -112,7 +119,10 @@
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock Text="Subscriptions" FontWeight="SemiBold" VerticalAlignment="Center" />
                 <Button Content="Refresh" Command="{Binding Subscriptions.RefreshCommand}" />
-                <Button Content="+" Command="{Binding Subscriptions.BeginCreateCommand}" />
+                <Button Content="+"
+                        Command="{Binding Subscriptions.BeginCreateCommand}"
+                        AutomationProperties.Name="Create subscription"
+                        AutomationProperties.HelpText="Opens the form for a new subscription on this topic." />
               </StackPanel>
               <StackPanel IsVisible="{Binding Subscriptions.IsCreating}" Orientation="Horizontal" Spacing="6">
                 <TextBox Text="{Binding Subscriptions.NewSubscriptionName}" Watermark="Subscription name" Width="160" />

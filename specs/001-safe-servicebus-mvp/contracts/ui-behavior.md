@@ -201,6 +201,21 @@ Color is never the only indicator of source, risk, status, selection, or failure
 existing `SendMessageView` DataTemplate and verifies template resolution in the send-message slice;
 DurationEditor tests neither own nor mask that repair.
 
+## Numeric Input Contract
+
+- `DurationEditor` is the universal reusable editor for duration-valued properties that use the
+  product's whole-millisecond `DurationValue` model. A named or parameterized
+  `DurationConstraint` supplies property-specific validation without changing the shared range.
+- Counts and sizes remain true whole-number inputs. They use a shared Avalonia numeric style with
+  visible spinner controls, a minimum width sufficient for the configured maximum, integer
+  formatting, direct typing, and explicit field-level minimum, maximum, and increment.
+- Every numeric input has a persistent visible label plus a programmatic name and help description
+  that states its unit or effect. Repeated toolbar inputs such as peek counts retain their labels.
+- At 820 DIPs and 100%, 150%, and 200% scaling, the complete configured maximum and both spinner
+  buttons remain inside the input without overlapping or obscuring digits.
+- Add/remove buttons are actions, not numeric steppers. A symbol-only action exposes a descriptive
+  automation name and help text and is excluded from numeric range behavior.
+
 ## Preview Package Contract
 
 Each artifact identifies product version, preview status, OS, architecture, signing/notarization

@@ -18,7 +18,7 @@ public class SendMessageViewModel : ReactiveObject
     private string? _outcome;
     private int _sendCount = 1;
     private bool _useScheduledTime;
-    private int _scheduleDelayMinutes = 5;
+    private TimeSpan _scheduleDelay = TimeSpan.FromMinutes(5);
 
     public string Body
     {
@@ -92,10 +92,10 @@ public class SendMessageViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _useScheduledTime, value);
     }
 
-    public int ScheduleDelayMinutes
+    public TimeSpan ScheduleDelay
     {
-        get => _scheduleDelayMinutes;
-        set => this.RaiseAndSetIfChanged(ref _scheduleDelayMinutes, value);
+        get => _scheduleDelay;
+        set => this.RaiseAndSetIfChanged(ref _scheduleDelay, value);
     }
 
     public ReactiveCommand<Unit, Unit> SendCommand { get; }
@@ -136,7 +136,7 @@ public class SendMessageViewModel : ReactiveObject
                     To: string.IsNullOrWhiteSpace(To) ? null : To,
                     Properties: props,
                     ScheduledEnqueueTime: UseScheduledTime
-                        ? DateTimeOffset.Now.AddMinutes(ScheduleDelayMinutes)
+                        ? DateTimeOffset.Now.Add(ScheduleDelay)
                         : null);
 
                 var count = Math.Max(1, SendCount);

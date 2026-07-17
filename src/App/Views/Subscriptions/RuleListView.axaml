@@ -9,7 +9,10 @@
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
       <TextBlock Text="Filters / Rules" FontWeight="SemiBold" VerticalAlignment="Center" />
       <Button Content="Refresh" Command="{Binding RefreshCommand}" />
-      <Button Content="+ Add" Command="{Binding BeginCreateCommand}" />
+      <Button Content="+ Add"
+              Command="{Binding BeginCreateCommand}"
+              AutomationProperties.Name="Add subscription rule"
+              AutomationProperties.HelpText="Opens the form for a new filter or rule." />
       <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
                  Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                  VerticalAlignment="Center" />

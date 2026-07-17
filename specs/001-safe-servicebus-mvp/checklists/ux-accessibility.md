@@ -76,3 +76,12 @@ technology, and cross-platform preview requirement quality
 - [ ] CHK048 Do first-internal profile and reconnect experiences clearly state that SAS is not saved, prompt for it on every connection, and expose that prompt accessibly without displaying the secret? [Credential UX, Spec §User Story 0 AC-8–AC-9; FR-046; SC-021]
 - [ ] CHK049 Does the internal artifact visibly distinguish development-run/single-host status from final cross-platform preview packaging, including revision and limitations without claiming package readiness? [Milestone Truthfulness, Spec §User Story 0 AC-10; First Internal Version Boundary]
 - [ ] CHK050 Do Send accessibility tests announce requested subscription context and actual parent-topic destination without creating duplicate queue/topic/subscription composer views? [Accessible Context, Spec §FR-043; SC-018]
+
+## First-Internal Numeric Universality Review
+
+- [ ] CHK051 Is the boundary between duration values and counts/sizes explicit enough to prevent one universal control from conflating different semantics? [Consistency, Spec §FR-044, FR-047]
+- [ ] CHK052 Does the reachable-surface inventory requirement define how pages with no editable numeric fields and still-present out-of-scope preview folders are reported? [Coverage, Spec §Assumptions; SC-019]
+- [ ] CHK053 Are labels, units/effects, keyboard entry, automation help, limits, increments, and no-obscured-value requirements defined for every true numeric input? [Completeness, Spec §FR-047]
+- [ ] CHK054 Are 820-DIP and 100%/150%/200% acceptance criteria measurable for both duration editors and remaining numeric steppers? [Measurability, Spec §FR-041, FR-047; SC-019]
+- [ ] CHK055 Are relative scheduling durations explicitly included in universal DurationEditor coverage without treating message counts as durations? [Clarity, Spec §FR-044]
+- [ ] CHK056 Are symbol-only add/remove actions explicitly distinguished from numeric steppers and given accessibility requirements appropriate to actions? [Accessibility, Spec §FR-047; UI Contract §Numeric Input Contract]

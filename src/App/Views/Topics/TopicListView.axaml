@@ -10,7 +10,11 @@
     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,12,16,8" Spacing="8">
       <TextBlock Text="Topics" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
       <Button Content="Refresh" Command="{Binding RefreshCommand}" VerticalAlignment="Center" />
-      <Button Content="+ New" Command="{Binding BeginCreateCommand}" VerticalAlignment="Center" />
+      <Button Content="+ New"
+              Command="{Binding BeginCreateCommand}"
+              VerticalAlignment="Center"
+              AutomationProperties.Name="Create topic"
+              AutomationProperties.HelpText="Opens the form for a new topic." />
       <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
                  VerticalAlignment="Center"
                  Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />

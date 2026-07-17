@@ -79,6 +79,27 @@ public class SendAvailabilityTests
         Assert.Contains("orders", viewModel.Error);
     }
 
+    [Fact]
+    public async Task Send_WithRelativeSchedule_UsesWholeDurationValue()
+    {
+        var service = new RecordingQueueService();
+        var viewModel = new SendMessageViewModel(
+            service,
+            new SendTargetContext(SendTargetKind.Queue, "orders", "orders"))
+        {
+            Body = "scheduled draft",
+            UseScheduledTime = true,
+            ScheduleDelay = TimeSpan.FromSeconds(90)
+        };
+        var earliest = DateTimeOffset.Now.AddSeconds(89);
+
+        await viewModel.SendCommand.Execute().ToTask();
+
+        var scheduled = Assert.Single(service.SendCalls).Message.ScheduledEnqueueTime;
+        Assert.NotNull(scheduled);
+        Assert.InRange(scheduled.Value, earliest, DateTimeOffset.Now.AddSeconds(91));
+    }
+
     private sealed class RecordingQueueService : IQueueService
     {
         public List<(string EntityPath, OutboundMessage Message)> SendCalls { get; } = [];

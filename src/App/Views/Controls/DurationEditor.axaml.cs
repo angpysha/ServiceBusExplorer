@@ -320,6 +320,3 @@ public partial class DurationEditor : UserControl
             ? error
             : null;
 }
-
-// Temporary compatibility for T005; T006 migrates all visible form usages.
-public sealed class TimeSpanControl : DurationEditor;

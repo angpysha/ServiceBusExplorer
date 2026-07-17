@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             xmlns:domain="using:ServiceBusExplorer"
+             xmlns:ctrl="using:ServiceBusExplorer.App.Views.Controls"
              x:DataType="vm:SendMessageViewModel"
              x:Class="ServiceBusExplorer.App.Views.Queues.SendMessageView">
   <Grid RowDefinitions="Auto,*,Auto">
@@ -46,15 +48,24 @@
         <Separator Margin="0,4" />
 
         <!-- Batch count + schedule -->
-        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <TextBlock Text="Count:" VerticalAlignment="Center" />
-          <NumericUpDown Value="{Binding SendCount}" Minimum="1" Maximum="1000" Width="80" />
+        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock Text="Message count" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <NumericUpDown Value="{Binding SendCount}"
+                         Minimum="1"
+                         Maximum="1000"
+                         Increment="1"
+                         AutomationProperties.Name="Message count"
+                         AutomationProperties.HelpText="Number of identical messages to send, from 1 to 1000."
+                         Margin="0,0,12,0" />
           <CheckBox Content="Schedule in" IsChecked="{Binding UseScheduledTime}" VerticalAlignment="Center" />
-          <NumericUpDown Value="{Binding ScheduleDelayMinutes}" Minimum="1" Maximum="10080" Width="80"
-                         IsEnabled="{Binding UseScheduledTime}" />
-          <TextBlock Text="min from now" VerticalAlignment="Center"
-                     Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-        </StackPanel>
+          <ctrl:DurationEditor Value="{Binding ScheduleDelay}"
+                               Constraint="{x:Static domain:DurationConstraint.ScheduledEnqueueDelay}"
+                               IsEnabled="{Binding UseScheduledTime}"
+                               Width="300"
+                               Margin="8,0,0,0"
+                               AutomationProperties.Name="Schedule delay"
+                               AutomationProperties.HelpText="Delay from now before Azure Service Bus enqueues the message." />
+        </WrapPanel>
       </StackPanel>
     </ScrollViewer>
 

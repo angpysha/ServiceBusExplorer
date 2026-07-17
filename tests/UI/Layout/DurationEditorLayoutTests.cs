@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ServiceBusExplorer.App.Views.Controls;
 using Xunit;
 
@@ -14,6 +16,13 @@ public class DurationEditorLayoutTests
     {
         foreach (var scale in new[] { 1.0, 1.5, 2.0 })
             AssertCompleteEditorAtScale(scale);
+    }
+
+    [AvaloniaFact]
+    public void SharedNumericStyleScaleMatrix_KeepsDigitsAndStepperButtonsVisible()
+    {
+        foreach (var scale in new[] { 1.0, 1.5, 2.0 })
+            AssertCompleteNumericInputAtScale(scale);
     }
 
     private static void AssertCompleteEditorAtScale(double scale)
@@ -87,6 +96,58 @@ public class DurationEditorLayoutTests
         Assert.True(
             textBox.Bounds.Width >= conservativeTextWidth,
             $"'{text}' needs {conservativeTextWidth:F1} DIPs but has {textBox.Bounds.Width:F1}.");
+    }
+
+    private static void AssertCompleteNumericInputAtScale(double scale)
+    {
+        var app = new ServiceBusExplorer.App.App();
+        app.Initialize();
+        var numericStyle = app.Styles
+            .OfType<Style>()
+            .Single(style => style.Selector?.ToString() == "NumericUpDown");
+        app.Styles.Remove(numericStyle);
+        var input = new NumericUpDown
+        {
+            Minimum = 1,
+            Maximum = 81920,
+            Increment = 1,
+            Value = 81920
+        };
+        var window = new Window
+        {
+            Width = 820,
+            Height = 200,
+            Content = input
+        };
+        window.Styles.Add(numericStyle);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(input.Bounds.Width >= 144, $"Numeric input is only {input.Bounds.Width:F1} DIPs wide.");
+        var textBox = Assert.Single(input.GetVisualDescendants().OfType<TextBox>());
+        AssertTextFits(textBox, "81920");
+
+        var buttons = input.GetVisualDescendants().OfType<Button>().Cast<Control>().ToArray();
+        Assert.Equal(2, buttons.Length);
+        var visibleControls = buttons.Prepend(textBox).ToArray();
+        foreach (var control in visibleControls)
+            AssertInside(control, window, scale);
+        var buttonBounds = buttons
+            .Select(
+                button =>
+                    new Rect(
+                        button.TranslatePoint(default, window)
+                            ?? throw new InvalidOperationException($"{button.Name} has no window position."),
+                        button.Bounds.Size))
+            .ToArray();
+        Assert.False(buttonBounds[0].Intersects(buttonBounds[1]), "The increase and decrease buttons overlap.");
+        var textWidthWithoutSpinner = textBox.Bounds.Width - buttons.Max(button => button.Bounds.Width);
+        var requiredTextWidth = "81920".Length * textBox.FontSize * 0.55;
+        Assert.True(
+            textWidthWithoutSpinner >= requiredTextWidth,
+            $"Digits have {textWidthWithoutSpinner:F1} DIPs before the spinner but need {requiredTextWidth:F1}.");
+
+        window.Close();
     }
 
     private static void AssertInside(Control control, TopLevel topLevel, double scale)
