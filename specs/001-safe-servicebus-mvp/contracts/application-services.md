@@ -9,6 +9,9 @@ Normative keywords MUST, MUST NOT, SHOULD, and MAY have their usual requirement 
 
 ### `IConnectionContextFactory`
 
+Post-internal target contract; it is not required to replace the current bootstrap path before the
+first internal candidate.
+
 `CreateAsync(ConnectionRequest request, CancellationToken cancellationToken)`:
 
 1. MUST validate endpoint, authentication, scope, entity path, and selected loading options before
@@ -21,7 +24,7 @@ Normative keywords MUST, MUST NOT, SHOULD, and MAY have their usual requirement 
 6. MUST omit namespace administration services for entity-scoped connections.
 7. MUST classify validation, authentication, authorization, cancellation, throttling, and service
    availability failures without exposing raw secrets.
-8. For a profile with a credential reference, MUST retrieve through `ICredentialVault`; any
+8. After the native-vault milestone, for a profile with a credential reference, MUST retrieve through `ICredentialVault`; any
    non-success result preserves the profile/reference and requests transient SAS input.
 
 ### `IConnectionProfileStore`
@@ -30,15 +33,22 @@ Normative keywords MUST, MUST NOT, SHOULD, and MAY have their usual requirement 
 - Serialization MUST be allowlist-based and versioned.
 - A corrupt/unreadable store returns a recoverable safe outcome and MUST NOT block a fresh
   connection.
-- Existing raw-string history MUST NOT be rewritten or echoed. Migration requires explicit user
-  review and retains only approved metadata.
-- The only credential-related serialized value is an optional opaque random reference. New
-  references MUST be CSPRNG-generated and contain no credential-derived or profile-derived data.
+- Existing raw-string history MUST NOT be rendered, echoed, logged, copied to a new store, or used
+  for reconnect. Before first-internal use, migration MUST atomically overwrite it with verified
+  approved metadata or remove it; inability to eliminate persisted raw values blocks startup/use
+  of the internal candidate.
+- First-internal serialization has no credential-related member, including no null/empty
+  credential reference. Selecting a SAS profile MUST require fresh full SAS input.
+- Only after the native-vault milestone may the schema add an optional opaque random reference.
+  New references MUST be CSPRNG-generated and contain no credential-derived or profile-derived data.
 
 ### `ICredentialVault`
 
 Framework-neutral asynchronous port owned by Core and implemented only behind the
 App/infrastructure boundary:
+
+This port and all save/retrieve UI are absent from first-internal production composition. They are
+enabled only by the later native-vault/connection gate.
 
 - `GetAvailabilityAsync(CancellationToken)` returns a typed availability result.
 - `StoreAsync(CredentialReference reference, SensitiveCredential credential, CancellationToken)`
@@ -95,6 +105,25 @@ default to active.
 - `PeekAsync(EntityAddress, MessageSource, PageRequest, CancellationToken)` is non-destructive,
   bounded, and returns source-tagged observed messages plus continuation information.
 - Empty or unavailable source returns an empty/unavailable result for that source only.
+
+### Current-path Send Contract
+
+The first internal milestone MUST preserve the existing
+`IQueueService.SendAsync(string entityPath, OutboundMessage message)` backend path while making its
+actual destination explicit:
+
+- queue context supplies the queue path;
+- topic context supplies the topic path;
+- subscription context supplies the parent topic path, never
+  `topic/Subscriptions/subscription`;
+- `SendTargetContext` MUST be constructed explicitly and expose requested context plus actual
+  destination before submission;
+- success, validation failure, authorization failure, and service failure outcomes MUST name the
+  actual queue/topic destination. Subscription outcomes MUST state that the parent topic was the
+  publish target;
+- draft validation failure or send failure MUST preserve the draft;
+- no parallel send service, broad connection refactor, or native-vault dependency is required for
+  this internal slice.
 
 ### `IMessageReceiveService`
 
@@ -177,6 +206,9 @@ App composition MUST register `SendMessageViewModel -> SendMessageView` as an ex
 independently of `DurationEditor`. Duration control implementation or registration MUST NOT be used
 as an implicit workaround for missing view resolution.
 
+The same template MUST resolve in queue, topic, and subscription contexts. Context-specific
+destination text comes from `SendTargetContext`, not from separate duplicated views.
+
 ## Operation and Diagnostic Contract
 
 All network ports:
@@ -213,3 +245,11 @@ Fake-backed contract tests MUST prove:
 17. contextual Azure property validation never narrows or clamps `DurationValue`;
 18. App template resolution returns `SendMessageView` for `SendMessageViewModel` without loading or
     depending on `DurationEditor`.
+19. first-internal settings serialize no connection string, SAS fragment/key, token, credential-
+    derived value, or credential-reference property after successful, failed, cancelled, repeated,
+    migrated, and restarted connection scenarios;
+20. selecting any first-internal SAS profile requests a full transient SAS value and makes zero
+    `ICredentialVault` calls;
+21. queue, topic, and subscription send tests capture respectively queue path, topic path, and
+    parent topic path, and subscription UI/outcomes never claim direct subscription send;
+22. internal startup refuses use when legacy raw history cannot be sanitized or removed.

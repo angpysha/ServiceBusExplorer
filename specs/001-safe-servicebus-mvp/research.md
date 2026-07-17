@@ -33,6 +33,14 @@ documentation.
   message/window behavior and are not reusable in Avalonia.
 - `SendMessageView` exists, and queue/subscription views bind a `SendMessageViewModel` through
   `ContentControl`, but `src/App/App.axaml` has no corresponding DataTemplate registration.
+- The current `SendMessageViewModel` calls `IQueueService.SendAsync(entityPath, message)`.
+  `QueueDetailViewModel` supplies the queue path; both `TopicDetailViewModel` and
+  `SubscriptionDetailViewModel` supply the topic name. Subscription publishing therefore already
+  uses the parent-topic backend path, but the UI/outcome does not explain that distinction.
+- `AppBootstrapper` currently calls `Settings.AddToHistory(opts.ConnectionString)` after connection.
+  `SettingsService` persists the trimmed full string in `List<string> ConnectionHistory`; its
+  comment explicitly says the full value is retained for reconnect. This path is incompatible with
+  any distributed internal artifact.
 
 ## Decisions
 
@@ -304,6 +312,61 @@ work does not own, hide, or opportunistically repair send view registration.
 duration dependency. Keeping ownership separate avoids making DurationEditor appear to fix the send
 surface accidentally.
 
+### R14. First Internal Executable Milestone
+
+**Decision**: The earliest shareable executable is gated after four reviewed changes:
+
+1. explicit dead-letter routing and typed purge confirmation;
+2. a first-internal persistence baseline that replaces raw-string history with non-secret profile
+   metadata and requires SAS re-entry;
+3. Send DataTemplate availability plus truthful actual-destination context while retaining the
+   current `IQueueService.SendAsync` backend;
+4. DurationEditor replacement across the reviewed inventory of visible queue, topic, and
+   subscription duration properties.
+
+The behavior changes remain separately reviewable, but no executable is distributed until their
+combined internal-candidate gate passes. Native vault, connection-context restructuring, advanced
+messaging/administration, sessions/recovery, and final packaging follow later.
+
+**History staging**:
+
+- first-internal schema has no `CredentialReference` member and serializes only an explicit
+  non-secret allowlist;
+- successful SAS connection stores profile metadata only; failed/cancelled attempts store no
+  credential input;
+- selecting a profile never hydrates SAS, and reconnect always requests the full value;
+- legacy string-array history is detected without rendering/logging. Startup atomically replaces
+  it with reviewed safe metadata or an empty profile envelope and verifies the result. If the raw
+  file cannot be sanitized/removed, startup blocks internal use with a safe error;
+- credential references and saved-SAS controls are introduced only with the later native-vault
+  schema/version and migration.
+
+**Send staging**:
+
+- one App DataTemplate exposes the existing composer in queue, topic, and subscription contexts;
+- a typed `SendTargetContext` carries source context, display name, actual destination kind/path,
+  and parent-topic explanation;
+- queue sends to queue path; topic publishes to topic path; subscription publishes to its parent
+  topic path. Focused fakes capture the exact `entityPath`, while UI tests assert pre-submit and
+  outcome wording;
+- this slice does not introduce a parallel send service or broad message architecture.
+
+**Artifact staging**: `dotnet run` and an optional single-host development publish are sufficient
+for internal feedback. The title/About surface must show internal-development status, revision, and
+known limitations. No final RID/package/signing/native-vault claim is inferred.
+
+**Alternatives considered**:
+
+- Wait for the full MVP: rejected because it delays review of already reachable high-risk defects.
+- Share after T001 alone: rejected because raw credential history, unavailable Send views, and
+  broken visible duration editing remain unacceptable.
+- Keep raw history under an “internal only” warning: rejected; labeling is not a security control.
+- Add temporary plaintext or encrypted-file SAS reconnect: rejected by the no-fallback boundary.
+- Pull native-vault work into the milestone: rejected because safe session-only SAS is sufficient
+  and avoids coupling the earliest feedback build to an unapproved native adapter.
+- Replace the current send backend now: rejected because current constructors already target the
+  correct queue/topic paths; the focused need is view resolution and truthful context/outcomes.
+
 ## Clarification Resolution
 
 | Planning question | Resolution |
@@ -321,6 +384,9 @@ surface accidentally.
 | Duration UI | Transactional Avalonia `DurationEditor`; invariant compact field plus labelled Flyout |
 | Scaling baseline | Existing app minimum width 820 DIPs at 1.0/1.5/2.0 |
 | Send DataTemplate | Separate send-slice App composition defect; not DurationEditor scope |
+| First internal gate | P0 routing + non-secret history + truthful Send + complete visible DurationEditor inventory |
+| Internal SAS | Session-only; full re-entry every connection; no reference or vault UI |
+| Internal artifact | `dotnet run` or single-host development publish, explicitly labelled internal |
 
 No `NEEDS CLARIFICATION` item remains.
 

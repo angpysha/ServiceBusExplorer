@@ -64,4 +64,15 @@ technology, and cross-platform preview requirement quality
 - [ ] CHK039 Does regression coverage explicitly prevent numeric values from disappearing behind increment or spinner controls? [Regression, Spec §FR-035, FR-041; SC-014]
 - [ ] CHK040 Is “compact and scannable” measured by one-row complete-value display, no permanent arrow wall, full labels on demand, and zero clipping rather than subjective attractiveness? [Visual Acceptance, Spec §FR-036–FR-037; Scope Decision; SC-014]
 - [ ] CHK041 Is the shared whole-millisecond range defined with exact endpoints so “representable” can be tested independently from Azure property constraints? [Measurability, Spec §FR-033, FR-040]
-- [ ] CHK042 Is `SendMessageViewModel` DataTemplate registration explicitly assigned to the send slice and tested independently, rather than hidden inside DurationEditor acceptance? [Separation, Spec §Known defect; Plan §Send view registration]
+- [ ] CHK042 Are Send-page availability and destination behavior independently testable rather than hidden inside DurationEditor or broader messaging acceptance? [Separation, Spec §User Story 0; FR-043; SC-018]
+
+## First Internal Version Experience
+
+- [ ] CHK043 Are queue and topic Send pages required to render the existing composer and expose the current send action, including actionable failure without losing the draft? [Availability, Spec §User Story 0 AC-4; User Story 2 AC-8–AC-9; FR-043]
+- [ ] CHK044 Does subscription Send identify its parent topic as the actual destination before submission and in success/failure outcomes, both visually and programmatically, with no direct-subscription-send wording? [Truthful Context, Spec §User Story 0 AC-5; User Story 2 AC-10; FR-043; SC-018]
+- [ ] CHK045 Does a reviewed inventory account for every duration input on currently visible Service Bus entity forms, with no inventoried form retaining the broken stepper? [Coverage, Spec §User Story 0 AC-6; FR-044; SC-019]
+- [ ] CHK046 Does development/test-only labeling communicate incomplete parity without implying that plaintext credential history is present or permitted? [Truthful Status, Spec §User Story 0 AC-10; FR-046; SC-021]
+- [ ] CHK047 Are the three internal slices demonstrated and reported separately so failure in dead-letter safety, Send availability, or DurationEditor coverage cannot be masked by aggregate success? [Evidence Clarity, Spec §FR-045; SC-017–SC-020]
+- [ ] CHK048 Do first-internal profile and reconnect experiences clearly state that SAS is not saved, prompt for it on every connection, and expose that prompt accessibly without displaying the secret? [Credential UX, Spec §User Story 0 AC-8–AC-9; FR-046; SC-021]
+- [ ] CHK049 Does the internal artifact visibly distinguish development-run/single-host status from final cross-platform preview packaging, including revision and limitations without claiming package readiness? [Milestone Truthfulness, Spec §User Story 0 AC-10; First Internal Version Boundary]
+- [ ] CHK050 Do Send accessibility tests announce requested subscription context and actual parent-topic destination without creating duplicate queue/topic/subscription composer views? [Accessible Context, Spec §FR-043; SC-018]

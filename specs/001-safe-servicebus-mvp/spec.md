@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-16
 
-**Status**: Approved requirements — amended 2026-07-17 for optional native-vault SAS persistence and compact duration editing
+**Status**: Approved requirements — amended 2026-07-17 for optional native-vault SAS persistence, compact duration editing, and the first internal version milestone
 
 **Input**: Deliver a minimum working cross-platform Service Bus Explorer centered on safe Azure Service Bus administration and message recovery while retaining the legacy application during preview.
 
@@ -14,8 +14,32 @@
 
 - Q: May users persist a full SAS connection string for reconnect? → A: Yes, only through an explicit option that is disabled by default and stores the string in the operating system's native credential vault; history retains only an opaque random reference, and Microsoft Entra access tokens are never persisted.
 - Q: Which duration-entry experience replaces the arrow-heavy TimeSpanControl? → A: A compact invariant-format duration text field with an adjacent Edit affordance that opens a fully labeled structured editor popover; values remain visible, keyboard and assistive-technology behavior is explicit, and service-specific limits are contextual validation rather than editor range limits.
+- Q: What must be complete before the first internal version is distributed? → A: Explicit dead-letter routing and purge confirmation safety, available queue/topic/subscription Send pages with truthful destination behavior, the approved hybrid DurationEditor on every currently visible Service Bus entity form that edits a duration, focused automated regression evidence, and non-secret connection history; saved SAS reconnect waits for the native vault milestone, so internal users re-enter SAS for every connection.
 
 ## User Scenarios & Testing *(mandatory)*
+
+### User Story 0 - First Internal Safety Slice (Priority: P0)
+
+As an internal evaluator, I can use the current core Service Bus send and dead-letter workflows and all visible duration inputs without the known routing, unavailable-page, or clipped-stepper defects, while connection history retains no SAS secret and each SAS connection requires re-entry.
+
+**Why this priority**: These three areas are the minimum coherent internal milestone: dead-letter routing can otherwise destroy active messages, unavailable Send pages block a core current workflow, and the broken duration control blocks or corrupts entity editing.
+
+**Independent Test**: In a development or test namespace, exercise active and dead-letter peek/purge, send from queue/topic/subscription contexts, and every currently visible Service Bus duration field; verify destination truthfulness, confirmation safety, transactional duration behavior, responsive/accessibility criteria, focused automated regression evidence, non-secret history records, and SAS re-entry after reconnect without requiring native-vault, advanced messaging, session/recovery, or packaging work.
+
+**Acceptance Scenarios**:
+
+1. **Given** active and dead-letter messages coexist, **When** the evaluator selects dead-letter peek or purge, **Then** only the explicitly selected dead-letter source is used and active messages remain unchanged.
+2. **Given** no message source is explicitly selected, **When** the evaluator attempts purge, **Then** the action is blocked and no source is inferred.
+3. **Given** an explicitly selected purge source, **When** the evaluator initiates purge, **Then** confirmation names the entity, source, and irreversible consequence, and cancellation starts no service-changing operation.
+4. **Given** a queue or topic context, **When** the evaluator opens Send, **Then** the existing message composer renders and a valid draft can invoke the current send behavior for that queue or topic.
+5. **Given** a subscription context, **When** the evaluator opens Send, **Then** the page clearly identifies that publishing targets the subscription's parent topic before submission and in the resulting outcome; it never implies a direct send to the subscription.
+6. **Given** any duration input reachable on a currently visible Service Bus entity form, **When** the evaluator views or edits it, **Then** the approved compact field and structured popover replace the broken stepper and satisfy the existing transactional, scaling, keyboard, accessibility, validation, and range requirements.
+7. **Given** the first internal candidate, **When** its focused regression suite runs, **Then** dead-letter routing/purge safety, all three Send contexts, and the inventoried visible duration forms each have passing automated evidence.
+8. **Given** any successful, failed, or cancelled SAS connection in the first internal version, **When** history and application settings are inspected, **Then** they contain only non-secret profile metadata and no full or partial SAS connection string, key, or credential-derived value.
+9. **Given** a prior SAS profile in the first internal version, **When** the evaluator reconnects or restarts the application, **Then** the application prompts for the full SAS connection string again and offers no saved-SAS reconnect until native-vault support is available.
+10. **Given** the first internal version starts or is distributed, **When** its label or limitations are reviewed, **Then** development/test-only wording describes incomplete feature parity and does not excuse or imply plaintext credential storage.
+
+---
 
 ### User Story 1 - Connect Safely and Browse a Namespace (Priority: P1)
 
@@ -56,6 +80,9 @@ As an operator, I can send, peek, receive, and settle messages on queues and sub
 5. **Given** a receive-and-delete operation, purge, entity deletion, or other irreversible action, **When** the user initiates it, **Then** a confirmation identifies the entity, source, and consequence before execution.
 6. **Given** the dead-letter source is displayed, **When** the user chooses purge, **Then** only that dead-letter source is purged; active messages remain untouched.
 7. **Given** no source has been explicitly selected, **When** the user attempts a source-specific destructive action, **Then** the action is blocked rather than defaulting to active messages.
+8. **Given** a queue context, **When** the user opens Send, **Then** the existing composer is available and a valid draft invokes the queue send behavior.
+9. **Given** a topic context, **When** the user opens Send, **Then** the existing composer is available and a valid draft invokes the topic publish behavior.
+10. **Given** a subscription context, **When** the user opens Send, **Then** the destination is visibly and accessibly identified as the parent topic before submission and in the outcome, with no claim that a subscription is a direct-send destination.
 
 ---
 
@@ -134,6 +161,9 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - Empty sources produce a clear empty result and never cause fallback to a different source.
 - Active, dead-letter, transfer dead-letter, and deferred messages are distinct sources or states; an action never silently substitutes one for another.
 - Transfer dead-letter may be unavailable for an entity or unsupported by its current routing; the application explains this without falling back.
+- A Send page may render while the current send behavior later rejects authorization, destination state, or message values; the draft remains available and page availability is not reported as send success.
+- A subscription's parent topic may be missing, disabled, or unauthorized; Send remains truthful about the parent destination and blocks or reports the publish failure without implying a direct subscription path.
+- Pre-existing raw connection-string history is not a supported input to the first internal version; it must be removed or sanitized to non-secret metadata before internal use and must never be copied into the new history path.
 - Peeked messages cannot be settled; settlement controls apply only to currently locked received messages.
 - Locks may expire, be lost, or be settled by another consumer; the user is informed and unsafe repeat settlement is blocked.
 - Receive-and-delete can lose a message if display fails after receipt; the warning and confirmation state that risk.
@@ -204,6 +234,11 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **FR-039**: Empty, malformed, negative, fractional-component, or out-of-range component input MUST identify every affected field and MUST NOT mutate the bound duration; Cancel or Escape MUST restore the exact original value after any valid or invalid pending edits.
 - **FR-040**: The duration editor's representable range MUST match the product's shared non-negative duration value range independently of any Azure property limit. Service-specific minimums, maximums, and special constraints MUST be presented as contextual validation naming the affected property, without narrowing the editor's general range or silently changing the value.
 - **FR-041**: At the application's documented minimum supported width and at 100%, 150%, and 200% display scaling, the primary duration value, full popover labels, numeric components, validation text, and actions MUST remain available without clipping, overlap, or digits disappearing behind increment controls; the layout MAY reflow to satisfy this requirement.
+- **FR-042**: The first internal version MUST include the T001-equivalent P0 dead-letter safety behavior in FR-012, FR-013, FR-016, and FR-020: active and dead-letter sources are explicit, absent source is not equivalent to active, dead-letter operations never fall back to active, and purge starts only after target-specific confirmation.
+- **FR-043**: In the first internal version, queue and topic Send pages MUST render the existing message composer and allow a valid draft to invoke the current queue-send or topic-publish behavior. A subscription Send page MUST identify its parent topic as the actual publish destination before submission and in success or failure outcomes, and MUST NOT represent a subscription as a direct-send destination.
+- **FR-044**: In the first internal version, the approved hybrid DurationEditor defined by FR-033 and FR-036–FR-041 MUST replace the broken stepper on every duration input reachable in the inventory of currently visible Service Bus entity forms; no inventoried form may retain the arrow-heavy or value-obscuring control.
+- **FR-045**: Internal-version evidence MUST include focused automated regression checks for (a) explicit dead-letter routing and purge cancellation/confirmation, (b) queue, topic, and subscription Send-page availability and actual destination semantics, and (c) DurationEditor presence and approved transactional, scaling, keyboard, accessibility, and no-obscured-value behavior across the complete visible-form inventory.
+- **FR-046**: Before first-internal distribution, the raw connection-string history write path MUST be disabled or replaced so that history and settings persist only the non-secret profile metadata allowed by FR-005. The first internal version MUST NOT save SAS credentials or credential references, MUST prompt for the full SAS connection string for every new or repeat connection, and MUST never persist Microsoft Entra access tokens. Development/test-only labeling MAY communicate incomplete feature parity but MUST NOT be used as a compensating control for plaintext credential storage.
 
 ### Key Entities
 
@@ -232,6 +267,28 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - Automated safety, workflow, accessibility, and packaging verification.
 - Preview distribution for Windows, macOS, and Linux with legacy Windows coexistence.
 
+### First Internal Version Boundary
+
+The first internal version is a restricted milestone within this MVP, not an MVP release or a claim that all P1 stories are complete.
+
+It MUST include:
+
+- T001-equivalent P0 explicit active/dead-letter routing and target-specific purge confirmation with cancellation causing no service change.
+- Available queue and topic Send pages using the existing composer and current send behavior, plus a subscription Send page that truthfully publishes to its parent topic.
+- The approved hybrid DurationEditor on every duration input in the reviewed inventory of currently visible Service Bus entity forms.
+- Focused automated regression evidence for all three slices.
+- Non-secret connection history with the raw connection-string write path disabled or replaced; SAS is re-entered for every connection and no saved-SAS reconnect is offered.
+- Development/test-only labeling for incomplete feature parity, without any credential-storage exception.
+
+It MAY defer until later MVP milestones:
+
+- Native-vault SAS persistence, saved-SAS reconnect, and the broader connection architecture beyond the first-internal non-secret-history baseline in FR-005–FR-007.
+- Advanced receive, settlement, deferred-message, session, and recovery workflows beyond what is needed to verify the P0 routing fix.
+- Full administration and rule parity beyond the currently visible forms needed for DurationEditor coverage.
+- Cross-platform packaging and general preview distribution.
+
+There is no plaintext credential-storage exception for the first internal version. The non-secret-history portion of FR-005–FR-006 is an internal exit criterion. Only native-vault persistence and saved-SAS reconnect are deferred; until they land, SAS credentials are session-only and re-entered for each connection.
+
 ### Explicitly Excluded from the First MVP
 
 - Event Grid and Relay workflows.
@@ -254,6 +311,7 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **Legacy coexistence**: Chosen — separate modern preview and legacy Windows application during the MVP. Rejected — replacing the legacy application at first preview; expanding the MVP until full legacy parity.
 - **Excluded services**: Chosen — Service Bus focus. Rejected — broad multi-service parity in the first MVP; visible non-working shells for excluded services.
 - **Duration editing**: Chosen — one compact invariant-format primary field plus an adjacent Edit affordance opening a fully labeled structured popover with typing and keyboard increments. Rejected — a permanently expanded wall of per-component spinner arrows; clipped narrow component fields; subjective visual acceptance such as “attractive” without observable layout criteria.
+- **First internal milestone**: Chosen — ship a restricted three-slice internal build containing P0 dead-letter safety, truthful Send-page availability, the approved hybrid DurationEditor on all visible Service Bus duration forms, and focused regression evidence. Rejected — waiting for the entire MVP before internal feedback; distributing the internal build as production-ready; omitting Send-page availability or DurationEditor because their later feature families are incomplete.
 
 ## Success Criteria *(mandatory)*
 
@@ -275,6 +333,11 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - **SC-014**: At the documented minimum supported application width and at 100%, 150%, and 200% scaling, all duration layout checks show the complete primary value, five full component labels, numeric values, validation text, and Apply/Cancel actions with zero clipping, overlap, or digits obscured by increment controls.
 - **SC-015**: Keyboard-only tests complete open, component traversal, direct typing, Up/Down increment, validation, Apply, Cancel, and Escape flows with the documented logical focus order and focus returning to the Edit affordance in 100% of tested closures.
 - **SC-016**: In 100% of invalid-input tests, every invalid duration component has a field-specific accessible error and the bound value remains exactly unchanged from its pre-edit value; in service-limit tests, the general editor retains the representable value while contextual validation names the constrained Azure property.
+- **SC-017**: The first internal candidate has 100% passing focused tests proving dead-letter peek and purge never affect active messages, absent source blocks purge, confirmation cancellation starts no service-changing operation, and confirmed purge identifies the exact entity and source.
+- **SC-018**: The first internal candidate renders the existing composer in queue and topic Send pages and successfully invokes their current send behaviors in acceptance tests; subscription Send evidence identifies the parent topic before submission and in every outcome, with zero direct-subscription-send wording.
+- **SC-019**: A reviewed inventory accounts for 100% of duration inputs on currently visible Service Bus entity forms, and every inventoried input uses the approved hybrid DurationEditor with passing transactional, minimum-width, 100%/150%/200% scaling, keyboard, accessibility, service-context validation, and no-obscured-numeric-value regression checks.
+- **SC-020**: A first internal version is not distributed unless the three focused regression groups in SC-017–SC-019 pass with zero known failures and their evidence identifies the tested source/destination contexts and visible-form inventory.
+- **SC-021**: Across successful, failed, cancelled, repeat, and post-restart connection tests, 100% of first-internal history and settings records contain only the FR-005 non-secret metadata allowlist, zero SAS secrets or credential-derived values, zero credential references, and zero Microsoft Entra access tokens; every repeat SAS connection prompts for the full SAS string. Any development/test-only label attributes the limitation to incomplete parity and contains no plaintext-storage exception.
 
 ## Assumptions
 
@@ -293,6 +356,12 @@ As a user on Windows, macOS, or Linux, I can install and operate the preview wit
 - The primary duration format is invariant and does not change with operating-system locale; `0.00:00:00`, `12.03:04:05`, and `12.03:04:05.006` are representative valid displays.
 - Hours, minutes, seconds, and milliseconds are component fields; service-specific duration constraints are not treated as component ranges or as the editor's general representable range.
 - The release must document a minimum supported application width before responsive duration acceptance testing; no visual approval depends on the subjective term “attractive.”
+- “Currently visible Service Bus entity forms” means every queue, topic, subscription, and related Service Bus administration form reachable in the first internal candidate that displays or edits at least one duration; the regression evidence records the reviewed inventory so omissions are measurable.
+- The first internal version satisfies the non-secret-history baseline but does not yet satisfy optional native-vault persistence, saved-SAS reconnect, or SC-013.
+- Users re-enter the full SAS connection string for every first-internal connection; the credential remains session-only and no opaque credential reference is written.
+- Any pre-existing raw connection-string history is removed or sanitized before first-internal evaluation and is never imported into the non-secret profile history.
+- Internal evaluators may still use dedicated development/test namespaces because feature parity is incomplete, not because weaker credential handling is permitted.
+- Internal distribution may use developer-run or existing internal delivery methods; platform packaging is not an exit criterion for this milestone.
 - Bounded retrieval is acceptable for large namespaces and message sources when continuation and refresh are clear.
 - English is the only required interface language for the first MVP.
 - Supported operating-system versions and package formats will be selected during planning, but Windows, macOS, and Linux must each have a launchable preview artifact.

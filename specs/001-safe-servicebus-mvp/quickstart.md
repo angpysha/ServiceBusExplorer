@@ -10,12 +10,44 @@ before tasks and human review.
 - SAS policy and Entra identity with intentionally varied permissions
 - Session-enabled, dead-letter, transfer-dead-letter, and deferred test fixtures
 - Windows 10 22H2+, macOS 13+, and Ubuntu 22.04+ validation hosts
-- Current-user Windows Credential Manager, macOS login Keychain, and a Linux desktop session with
-  libsecret plus an active freedesktop Secret Service provider
+- For the later native-vault gate only: current-user Windows Credential Manager, macOS login
+  Keychain, and a Linux desktop session with libsecret plus an active Secret Service provider
 
 Never place credentials or message content in source, test snapshots, command history, or logs.
 Live tests acquire identity from the environment or receive SAS through a secret environment
 variable.
+
+## First Internal Candidate Gate
+
+The earliest executable that may be shared internally is not a final preview package. Run from
+source with `dotnet run --project src/App/App.csproj` or use a reviewed single-host development
+publish. The title/About surface must identify **Internal development build**, revision, and known
+limitations.
+
+The gate is cumulative:
+
+1. Pass Scenario 1 dead-letter routing and typed purge confirmation.
+2. Seed settings with a synthetic canary SAS string, start the app, and verify raw history is
+   atomically sanitized/removed. Repeat successful, failed, cancelled, repeat, and restarted SAS
+   connections.
+3. Open Send from queue, topic, and subscription contexts. Verify queue path, topic path, and
+   subscription parent-topic path through the focused fake/contract suite and visible outcomes.
+4. Complete Scenario 6 for every duration field in the reviewed queue/topic/subscription visible-
+   form inventory.
+5. Inspect settings, history, logs, screenshots, and test attachments; then review the internal
+   label and limitations.
+
+Expected:
+
+- absent source cannot purge; dead-letter purge never touches active messages; cancellation makes
+  zero service-changing calls;
+- history contains only non-secret profile metadata and no credential-reference property;
+- every SAS connection asks for the full value and no saved-SAS/vault control appears;
+- queue/topic Send resolves the composer, and subscription says it publishes to the parent topic
+  before submission and in success/failure output;
+- all inventoried visible duration fields use `DurationEditor` and pass unit/UI/layout/accessibility
+  regressions;
+- no executable is shared until all four behavior/security areas receive human approval.
 
 ## Build and Automated Checks
 
@@ -54,9 +86,10 @@ Expected:
 - operation output identifies dead-letter without message content;
 - unavailable transfer dead-letter never falls back.
 
-This is the required first implementation slice and maps to AC-4/AC-5 and SC-003/SC-004.
+This is the required first implementation slice. It is necessary but not sufficient for internal
+distribution.
 
-## Scenario 2: Optional Native-Vault SAS Storage
+## Scenario 2: Optional Native-Vault SAS Storage (Post-Internal)
 
 On each supported OS:
 
@@ -153,15 +186,19 @@ Expected:
 
 ## Scenario 7: Send View Resolution
 
-Navigate to Send from queue and subscription detail without interacting with any duration property.
+Navigate to Send from queue, topic, and subscription detail without interacting with any duration
+property. Use focused fakes to capture the path passed to the current backend.
 
 Expected:
 
 - App resolves `SendMessageViewModel` to the existing `SendMessageView`;
+- queue uses its queue path and topic uses its topic path;
+- subscription identifies and uses its parent topic path before send and in success/failure
+  outcomes, never a direct subscription path;
 - no “view not found”/raw view-model display appears;
 - the resolution test has no dependency on `DurationEditor`.
 
-## Scenario 8: Packages and Coexistence
+## Scenario 8: Final Preview Packages and Coexistence
 
 Produce and smoke-test:
 

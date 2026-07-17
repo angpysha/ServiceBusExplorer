@@ -37,4 +37,6 @@
 - Native credential-vault names and platform mapping are approved product security constraints, not unselected implementation details.
 - The approved compact duration-editor amendment is integrated into acceptance scenarios, edge cases, FR-033 and FR-035–FR-041, scope decisions, SC-010 and SC-014–SC-016, and assumptions with objective format, responsiveness, keyboard, accessibility, validation, range, and regression criteria.
 - The duration popover is an approved interaction constraint; visual acceptance is expressed through one-row compactness, complete-value visibility, full labels, and zero clipping or overlap rather than subjective appearance.
+- The first internal version is explicitly bounded by FR-042–FR-046 and SC-017–SC-021: P0 dead-letter safety, truthful Send-page availability, complete visible-form DurationEditor coverage, focused automated evidence, non-secret profile history, and SAS re-entry for every connection.
+- Native-vault persistence, saved-SAS reconnect, broader connection architecture, advanced messaging, sessions/recovery, broad administration, and packaging remain later final-MVP requirements; plaintext credential history is not deferred or excepted.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.

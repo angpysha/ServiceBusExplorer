@@ -14,9 +14,11 @@ factory that honors SAS or `TokenCredential`, scope, tenant, loading options, ca
 lifetime. Optional SAS persistence is mediated by a framework-neutral asynchronous
 `ICredentialVault` and native per-user stores; it is disabled by default and settings contain only
 an opaque random reference. The modern `TimeSpanControl` is replaced by a transactional Avalonia
-`DurationEditor`, while Core owns invariant `DurationValue` semantics. The first implementation
-slice remains deliberately limited to the destructive dead-letter routing defect, regression
-tests, and confirmation wiring.
+`DurationEditor`, while Core owns invariant `DurationValue` semantics. The earliest distributable
+internal milestone is intentionally narrower than the MVP: it combines reviewed P0 dead-letter
+safety, truthful queue/topic/subscription Send availability through the current backend path,
+complete visible-form DurationEditor replacement, and a no-secret connection-history baseline.
+Native-vault reconnect and the broader connection architecture follow only after this milestone.
 
 ## Technical Context
 
@@ -25,9 +27,10 @@ tests, and confirmation wiring.
 **Primary Dependencies**: Avalonia 11, ReactiveUI, `Azure.Messaging.ServiceBus`,
 `Azure.Identity`, Microsoft.Extensions.DependencyInjection, Microsoft.Extensions.Logging
 
-**Storage**: Local per-user JSON for versioned, secret-free connection profiles, display
-preferences, and an optional opaque random credential reference; optional SAS secrets reside only
-in Windows Credential Manager, macOS Keychain Services, or Linux Secret Service/libsecret
+**Storage**: First internal version: local per-user JSON containing only versioned non-secret
+profile metadata, with no credential reference and SAS re-entered for every connection. Later MVP:
+an optional opaque random credential reference may address SAS held only in Windows Credential
+Manager, macOS Keychain Services, or Linux Secret Service/libsecret
 
 **Testing**: New .NET 10 xUnit test project(s) with hand-written fakes around application ports;
 Avalonia UI/layout/accessibility tests at 820 device-independent pixels and 100/150/200% scaling;
@@ -47,7 +50,9 @@ at each Azure call and between batch items
 encrypted-file fallback; Entra access tokens are not stored by this feature; no secret or message
 content in history or routine logs; no sync-over-async; source-specific destructive actions require
 an explicit source and confirmation; no production code for excluded Azure services; no invented
-network API; WinForms remains buildable
+network API; WinForms remains buildable. Before first-internal distribution, raw history writes are
+removed, credential references and saved-SAS reconnect are unavailable, and internal labeling
+cannot compensate for insecure persistence
 
 **Scale/Scope**: One interactive operator, one live connection context at a time, namespace or
 single-entity scope, queues/topics/subscriptions/rules, and bounded message batches
@@ -63,7 +68,7 @@ single-entity scope, queues/topics/subscriptions/rules, and bounded message batc
 | I. Avalonia is the product UI | PASS | All new behavior targets `src/App`; WinForms is retained, not extended into new architecture. |
 | II. Preserve layer boundaries | PASS | Core owns models/ports, ViewModels own presentation state, Services own Azure adapters, App owns dialogs/composition/persistence. |
 | III. Secure modern Azure integration | PASS | Profiles exclude secrets; optional SAS storage is native-vault-only and Entra tokens are excluded. |
-| IV. Tests define completion | PASS | Safety fixes lead with regression tests; vault lifecycle, unit, contract, UI/accessibility, live Azure, and package smoke layers are defined. |
+| IV. Tests define completion | PASS | Four first-internal evidence groups gate sharing; later vault lifecycle, unit, contract, live Azure, and package smoke layers remain defined. |
 | V. Async, observable, resilient | PASS | All ports accept cancellation; typed outcomes distinguish cancellation, stale state, partial success, and failure. |
 | Technical/security constraints | PASS | .NET 10/Avalonia 11/ReactiveUI retained; no unsupported package is required. |
 | Workflow/governance | PASS | Existing code was inspected through the project codesearch index and alternatives/migration impact are recorded. |
@@ -81,7 +86,9 @@ No constitutional exception or unresolved `NEEDS CLARIFICATION` remains.
    typed target, source, consequence, and risk level rather than a preformatted message.
 3. **Authoritative connection context**: a single factory validates a transient connection request,
    creates SAS or identity clients, probes capabilities, and returns an async-disposable live
-   context. Profiles and live credentials are separate types.
+   context. Profiles and live credentials are separate types. This is the post-internal target
+   architecture; the internal milestone removes raw persistence from the current bootstrap path
+   without making the broader factory refactor a prerequisite.
 4. **Authentication default**: Entra uses `DefaultAzureCredential` for pre-established identity and
    an explicit interactive-browser option when requested. Interactive sign-in uses the
    application-owned public-client ID and local redirect URI; optional tenant ID is applied to the
@@ -120,6 +127,26 @@ No constitutional exception or unresolved `NEEDS CLARIFICATION` remains.
 12. **Send view registration**: the missing `DataTemplate` mapping
     `SendMessageViewModel -> SendMessageView` is a separate App composition defect assigned to the
     send-message slice, not to `DurationEditor` work.
+13. **First-internal history floor**: replace `List<string>`/`AddToHistory(connectionString)` with
+    an allowlisted, versioned profile writer before any internal artifact leaves the development
+    environment. The internal schema contains label, namespace endpoint, auth mode, optional tenant
+    and entity scope, and non-sensitive preferences only. It has no credential or credential-
+    reference field. Legacy raw entries are never rendered, copied, logged, or used for reconnect;
+    startup must atomically overwrite them with reviewed non-secret metadata or remove them, and
+    must fail closed if sanitization cannot complete.
+14. **First-internal SAS behavior**: the full SAS connection string exists only in the current
+    connection request/live client. Selecting a profile restores metadata but leaves SAS empty.
+    Every initial, repeat, and post-restart SAS connection requires full re-entry. No vault toggle,
+    `ICredentialVault` call, reference generation, or saved-SAS claim is present in this milestone.
+15. **Focused Send extension**: preserve the current `IQueueService.SendAsync(entityPath, message)`
+    backend. Queue passes its queue path; topic passes its topic path; subscription also passes its
+    parent topic path. A typed `SendTargetContext` distinguishes requested context from actual
+    publish destination so the subscription page and outcome state “publishes to parent topic”
+    before and after the attempt.
+16. **Internal artifact status**: the milestone may run via `dotnet run` or a single-host
+    development publish. It must display an **Internal development build** label, revision, and
+    limitations. This is not evidence for final RID packaging, signing, native-vault, or preview
+    release gates.
 
 Detailed rationale is in [research.md](research.md), models in
 [data-model.md](data-model.md), and normative desktop contracts in [contracts/](contracts/).
@@ -169,22 +196,34 @@ suite so .NET 10 contracts and Avalonia behavior can run cross-platform.
 
 ## Delivery Slices
 
-1. **Safety regression slice**: introduce explicit `MessageSource`, remove destructive default
-   parameters, add fake-backed queue/subscription routing tests, and wire typed confirmation for
-   purge. Do not refactor unrelated entity screens.
-2. **Connection safety slice**: separate `ConnectionProfile` from transient credentials, migrate
-   raw history defensively, add the connection-context factory and `ICredentialVault`, approve a
-   native adapter implementation, and honor auth/scope/capabilities. This does not alter T001.
-3. **Core administration and messaging**: fill entity/rule lifecycle, send/receive/settlement,
-   typed outcomes, bounded retrieval, stale-state handling, and independently register the existing
-   `SendMessageView` DataTemplate.
-4. **Sessions and selected recovery**: ownership state machine, deferred lookup, send-before-settle
+1. **Internal P0 routing slice**: introduce explicit `MessageSource`, remove destructive defaults,
+   add fake-backed queue/subscription routing tests, and wire typed purge confirmation. Stop for
+   human review; no internal distribution yet.
+2. **Internal persistence safety baseline**: disable the raw connection-string history writer,
+   persist only the first-internal profile allowlist, sanitize/remove legacy raw records, require
+   SAS re-entry, and add canary/disk-inspection tests. Stop for security-focused human review; no
+   internal distribution yet.
+3. **Internal Send availability slice**: register `SendMessageViewModel -> SendMessageView`, retain
+   the current queue/topic backend path, add explicit actual-destination context/outcomes, and prove
+   queue, topic, and subscription-parent-topic behavior with focused tests.
+4. **Internal DurationEditor slice**: replace every inventoried modern Service Bus duration control,
+   then pass Core unit and Avalonia transaction/layout/keyboard/accessibility regressions.
+5. **First internal candidate gate**: run the combined focused suite, inspect settings/history,
+   exercise development-run or single-host artifact startup, and verify internal labeling. Human
+   approval is required before sharing the executable.
+6. **Native vault and connection architecture**: add `ICredentialVault`, approve native adapters,
+   introduce credential references/saved-SAS reconnect, and complete auth/scope/capability factory
+   work without weakening the internal profile baseline.
+7. **Broader administration and messaging**: complete entity/rule lifecycle, bounded browse,
+   receive/settlement, typed outcomes, and stale-state handling.
+8. **Sessions and selected recovery**: ownership state, deferred lookup, send-before-settle
    recovery, diagnostic property treatment, and per-item outcomes.
-5. **Accessible preview and packaging**: replace `TimeSpanControl` with the transactional
-   `DurationEditor`, verify keyboard/focus/automation and 820-DIP scaling layouts, preserve honest
-   service navigation, and produce package launch smoke evidence and preview guidance.
+9. **Final accessibility and preview packaging**: complete P1-wide accessibility, self-contained
+   RID artifacts, native-vault package smoke, signing-status evidence, and public preview guidance.
 
-Each slice ends at a human review checkpoint; tasks are produced later by `/speckit.tasks`.
+Each slice ends at a human review checkpoint. Existing `tasks.md` is intentionally untouched in
+this Phase 5 amendment and must be realigned by the later `/speckit.tasks`/analysis workflow before
+implementation.
 
 ## Post-design Constitution Check
 
@@ -197,11 +236,15 @@ Each slice ends at a human review checkpoint; tasks are produced later by `/spec
 | Safety, vault lifecycle, contract, accessibility, live Azure, and package verification trace to acceptance criteria | PASS |
 | Core duration semantics remain framework-neutral and App owns Avalonia interaction/layout | PASS |
 | Legacy Popup/PInvoke reuse is prohibited and Send DataTemplate repair remains separate | PASS |
+| First internal distribution is blocked on secret-free history with no credential reference | PASS |
+| Internal Send reuses the current backend while exposing truthful actual destination | PASS |
+| Native vault, broad connection refactor, advanced workflows, and final packaging remain later | PASS |
 | Alternatives, migration impact, exclusions, and the first implementation slice are explicit | PASS |
 
 **Final design gate assessment**: PASS, subject to mandatory human review. No complexity waiver is
-requested. Package selection is intentionally gated rather than unresolved architecture: no
-credential package may enter implementation until its review passes.
+requested. The first internal candidate has its own gate and is not a preview release. Package
+selection remains intentionally gated: no credential package may enter implementation until its
+review passes.
 
 ## Complexity Tracking
 

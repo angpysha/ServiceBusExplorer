@@ -17,6 +17,22 @@
 
 ## Connection Experience
 
+### First internal version
+
+This subsection takes precedence until the native-vault milestone:
+
+1. History lists only non-secret profile labels/endpoints/auth/scope metadata.
+2. Selecting a SAS profile restores metadata but leaves the full SAS field empty, focuses or
+   exposes it predictably, and states **SAS is not saved in this internal build**.
+3. Every SAS connection, including repeat and post-restart use, requires full re-entry.
+4. No **Save SAS**, **Replace saved SAS**, vault status, or credential-reference UI is present.
+5. Legacy raw-string history is never shown. If startup cannot sanitize/remove it, connection UI is
+   blocked behind a safe actionable error rather than continuing with plaintext persistence.
+6. Title/About/status identifies **Internal development build**, revision, incomplete parity, and
+   the absence of saved-SAS reconnect. Internal wording never implies a secret-storage exception.
+
+### Native-vault MVP behavior
+
 1. User selects **SAS** or **Microsoft Entra ID** before connecting.
 2. SAS requests current-attempt credentials. **Save SAS in this device's credential vault** is
    off by default, requires explicit selection, names the platform store, and states that no
@@ -92,6 +108,17 @@ delivery consequences.
   session.
 - Binary, malformed, empty, and truncated bodies preserve metadata and announce representation.
   Copy/export is deliberate and warns that content may be sensitive.
+
+## Send Experience
+
+- Queue, topic, and subscription Send surfaces resolve the same existing `SendMessageView`.
+- Before submission, queue text names the queue; topic text names the topic; subscription text
+  states **Publishes to parent topic: {topic}** while retaining the subscription name as context.
+- Success and failure outcomes name the actual queue/topic destination. No subscription wording
+  says or implies that Service Bus sends directly to a subscription.
+- A failed validation or backend attempt leaves the draft available.
+- The first internal version uses the current send backend path. View availability and destination
+  truthfulness do not claim broader messaging completeness.
 
 ## Keyboard Contract
 
@@ -179,3 +206,8 @@ DurationEditor tests neither own nor mask that repair.
 Each artifact identifies product version, preview status, OS, architecture, signing/notarization
 status, extraction/launch steps, and known limitations. Windows documentation names the legacy
 application as a separate fallback and does not imply that the preview replaced it.
+
+The first internal artifact is a separate pre-preview gate. It MAY use `dotnet run` or a
+single-host development publish and MUST identify itself as an internal development build with
+revision and limitations. It MUST NOT claim final RID coverage, signing, native-vault package
+validation, or preview readiness.

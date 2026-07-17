@@ -43,11 +43,25 @@ Secret-free persisted identity for reconnect.
 | Scope | `NamespaceScope` or `EntityScope` | Required |
 | LoadingOptions | flags | Service Bus options only; excluded services have no flags |
 | DisplayPreferences | allowlisted record | No body, property, token, or credential fields |
-| CredentialReference | opaque random string? | SAS only; optional; CSPRNG-generated and not derived from credential/profile data |
+| CredentialReference | opaque random string? | Absent from first-internal schema; introduced only with native-vault milestone |
 | SchemaVersion | positive integer | Required for defensive migration |
 
 Validation rejects URI user information, query secrets, SAS key fields, complete connection
 strings, and unknown serialized fields that could contain secret material.
+
+Schema staging:
+
+- **Internal schema v1** serializes `Id`, `Label`, `FullyQualifiedNamespace`,
+  `AuthenticationMode`, optional `EntraInteraction`/`TenantId`, `Scope`, `LoadingOptions`,
+  `DisplayPreferences`, and `SchemaVersion`. `CredentialReference` is not a JSON member.
+- Selecting a v1 SAS profile produces metadata only. A fresh transient SAS string is mandatory for
+  every connection and is never copied into the profile.
+- Existing raw `ConnectionHistory` string arrays are legacy-secret input, not profiles. Migration
+  may derive only reviewed endpoint/auth/scope metadata in memory, then atomically overwrite and
+  verify the file; otherwise it removes the entries. Failure to eliminate the raw persisted values
+  blocks internal startup/use.
+- **Vault schema v2+** may add optional `CredentialReference` only after native-vault composition
+  and lifecycle gates pass. It never changes the v1 no-secret invariant.
 
 ## CredentialReference, SavedSasCredential, and VaultOutcome
 
@@ -193,6 +207,29 @@ Validation:
 - reserved/conflicting/duplicate-case property names are rejected specifically;
 - duration precision is milliseconds and no product day cap is applied;
 - body/properties are never routine diagnostic fields.
+
+## SendTargetContext
+
+Typed, non-secret context shared by the send ViewModel and outcome presentation:
+
+| Field | Meaning |
+|---|---|
+| RequestedContext | `Queue`, `Topic`, or `Subscription` |
+| ContextDisplayName | Queue/topic/subscription name shown to the user |
+| ActualDestinationKind | `Queue` or `Topic` |
+| ActualEntityPath | Queue path or parent topic path passed to the current backend |
+| ParentTopicName | Required only for subscription context |
+
+Invariants:
+
+- Queue context sends to that queue.
+- Topic context publishes to that topic.
+- Subscription context publishes to its parent topic; it never forms or reports a direct
+  subscription-send path.
+- Pre-submit text and success/failure outcomes use `ActualDestinationKind` and
+  `ActualEntityPath`; requested subscription context remains visible for orientation.
+- `SendTargetContext` changes presentation/orchestration context only. The internal milestone
+  continues to call the existing `IQueueService.SendAsync(actualEntityPath, message)` path.
 
 ## DurationValue
 

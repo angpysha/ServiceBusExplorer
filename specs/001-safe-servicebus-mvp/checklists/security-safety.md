@@ -13,7 +13,7 @@ quality
 - [ ] CHK003 Is “routine diagnostics” bounded clearly enough to prohibit raw SDK exception data that may echo inputs? [Clarity, Spec §FR-008]
 - [ ] CHK004 Are SAS and Entra reconnect requirements distinct and measurable, with optional SAS vault retrieval separated from mandatory non-persistence of Entra access tokens? [Clarity, Spec §FR-003, FR-006–FR-007]
 - [ ] CHK005 Are tenant, namespace, entity scope, and loading-option requirements consistent across profile, connect, and capability behavior? [Consistency, Spec §FR-003–FR-005]
-- [ ] CHK006 Does the specification keep automatic migration of pre-existing raw connection history out of scope without permitting legacy plaintext to become a vault or profile fallback? [Boundary, Spec §Explicitly Excluded; FR-006]
+- [ ] CHK006 Does legacy-history handling permit only verified non-secret metadata derivation or removal, while prohibiting raw values from being rendered, copied into profiles/vaults, or retained as a reconnect fallback? [Boundary, Spec §Edge Cases; FR-006, FR-046]
 
 ## Source Routing and Destructive Actions
 
@@ -56,3 +56,13 @@ quality
 - [ ] CHK034 Are profile deletion and optional vault cleanup specified as separate user choices with recoverable partial outcomes? [Completeness, Spec §User Story 1 AC-8; FR-007]
 - [ ] CHK035 Does package-selection guidance require license, maintenance, native-code, transitive dependency, fallback, supply-chain, and packaged cross-platform smoke review before adoption? [Dependency Risk, Constitution §Technical Constraints]
 - [ ] CHK036 Is any in-memory vault limited explicitly to tests and prohibited from production composition as a persistence fallback? [Fallback Safety, Spec §FR-006–FR-007]
+
+## First Internal Version Security Baseline
+
+- [ ] CHK037 Is the current raw connection-string history write path required to be disabled or replaced before first-internal distribution, with no environment-based exception? [Security Baseline, Spec §First Internal Version Boundary; FR-046]
+- [ ] CHK038 Do successful, failed, cancelled, repeat, and post-restart tests prove that first-internal history/settings contain only the FR-005 non-secret allowlist and no SAS secret, credential-derived value, credential reference, or Entra access token? [Coverage, Spec §User Story 0 AC-8; FR-046; SC-021]
+- [ ] CHK039 Is saved-SAS reconnect explicitly unavailable until native-vault support lands, requiring full SAS re-entry for every first-internal connection? [Persistence Boundary, Spec §User Story 0 AC-9; FR-046; SC-021]
+- [ ] CHK040 Does internal exit evidence prove absent-source blocking, exact dead-letter routing, target-specific purge confirmation, and cancellation with no service-changing operation? [P0 Safety, Spec §FR-042; SC-017]
+- [ ] CHK041 Is development/test-only labeling tied solely to incomplete feature parity and explicitly prohibited from excusing plaintext or weaker credential storage? [Truthfulness, Spec §User Story 0 AC-10; FR-046; SC-021]
+- [ ] CHK042 Does the first-internal gate block executable sharing until the raw writer is removed, legacy canary history is sanitized/removed, read-back inspection passes, and a security-focused human review approves the result? [Gate Ordering, Spec §FR-046; Plan §Delivery Slices]
+- [ ] CHK043 Is `ICredentialVault`, credential-reference schema, and saved-SAS UI explicitly absent—not merely disabled by convention—from first-internal production composition? [Scope Safety, Spec §First Internal Version Boundary; FR-046]
