@@ -68,10 +68,27 @@
                  Text="{Binding ConnectionString}"
                  AcceptsReturn="False"
                  Watermark="Endpoint=sb://namespace.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=..." />
-        <TextBlock Text="SAS values are session-only in this internal build. Enter the full connection string for every connection."
+        <TextBlock Text="SAS is session-only unless you opt in below. When the platform credential vault is available, you can save an opaque reconnect reference — never a plaintext credential file."
                    FontSize="11"
                    TextWrapping="Wrap"
                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+
+        <CheckBox IsVisible="{Binding ShowSaveSasOption}"
+                  IsChecked="{Binding SaveSasToVault}"
+                  Content="Save SAS in this device's credential vault"
+                  Margin="0,6,0,0" />
+
+        <TextBlock IsVisible="{Binding ShowSaveSasOption}"
+                   Text="{Binding VaultStatusMessage}"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+
+        <TextBlock IsVisible="{Binding RequiresManualSas}"
+                   Text="{Binding VaultStatusMessage}"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="#D13438" />
 
         <!-- Auth Mode -->
         <TextBlock Text="Authentication" FontWeight="SemiBold" Margin="0,10,0,4" />
@@ -99,6 +116,13 @@
                 Background="#20D13438" CornerRadius="4" Padding="10,8" Margin="0,8,0,0">
           <TextBlock Text="{Binding ErrorMessage}"
                      Foreground="#D13438"
+                     TextWrapping="Wrap" />
+        </Border>
+
+        <Border IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                Background="#201078D4" CornerRadius="4" Padding="10,8" Margin="0,8,0,0">
+          <TextBlock Text="{Binding StatusMessage}"
+                     Foreground="#0078D4"
                      TextWrapping="Wrap" />
         </Border>
 
