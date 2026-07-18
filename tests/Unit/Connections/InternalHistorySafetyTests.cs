@@ -51,15 +51,14 @@ public sealed class InternalHistorySafetyTests : IDisposable
     }
 
     [Fact]
-    public void ConnectionProfile_HasNoCredentialReferenceOrSecretMember()
+    public void ConnectionProfile_AllowsOptionalOpaqueReferenceButNoSecretMembers()
     {
-        var propertyNames = typeof(ConnectionProfile)
-            .GetProperties()
-            .Select(property => property.Name)
-            .ToArray();
+        var properties = typeof(ConnectionProfile).GetProperties();
+        var propertyNames = properties.Select(property => property.Name).ToArray();
 
+        Assert.Contains("CredentialReference", propertyNames);
+        Assert.Equal(typeof(CredentialReference), properties.Single(p => p.Name == "CredentialReference").PropertyType);
         Assert.DoesNotContain(propertyNames, name =>
-            name.Contains("Credential", StringComparison.OrdinalIgnoreCase) ||
             name.Contains("Secret", StringComparison.OrdinalIgnoreCase) ||
             name.Contains("ConnectionString", StringComparison.OrdinalIgnoreCase));
     }

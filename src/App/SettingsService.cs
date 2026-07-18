@@ -1,10 +1,12 @@
+#nullable enable
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ServiceBusExplorer.App;
 
 public class AppSettings
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public List<ConnectionProfile> ConnectionHistory { get; set; } = [];
@@ -25,7 +27,8 @@ public class SettingsService
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
     private static readonly string[] ForbiddenMarkers =
@@ -33,7 +36,6 @@ public class SettingsService
         "SharedAccessKey",
         "SharedAccessSignature",
         "connectionString",
-        "credentialReference",
         "accessToken"
     ];
 
@@ -83,7 +85,25 @@ public class SettingsService
     {
         var settings = existing ?? Load();
         var profile = CreateProfile(options);
-        settings.ConnectionHistory.RemoveAll(item => item == profile);
+
+        var existingIndex = settings.ConnectionHistory.FindIndex(item =>
+            string.Equals(item.NamespaceEndpoint, profile.NamespaceEndpoint, StringComparison.OrdinalIgnoreCase) &&
+            item.AuthMode == profile.AuthMode &&
+            string.Equals(item.EntityPath, profile.EntityPath, StringComparison.Ordinal));
+
+        if (existingIndex >= 0)
+        {
+            var previous = settings.ConnectionHistory[existingIndex];
+            profile = profile with
+            {
+                Id = previous.Id,
+                // Default-off save: never inherit or invent a credential reference here.
+                CredentialReference = null,
+                SchemaVersion = ConnectionProfile.CurrentSchemaVersion
+            };
+            settings.ConnectionHistory.RemoveAt(existingIndex);
+        }
+
         settings.ConnectionHistory.Insert(0, profile);
         if (settings.ConnectionHistory.Count > 10)
             settings.ConnectionHistory = settings.ConnectionHistory.Take(10).ToList();
@@ -156,7 +176,12 @@ public class SettingsService
             namespaceEndpoint,
             options.AuthMode,
             Normalize(options.TenantId),
-            Normalize(options.EntityPath));
+            Normalize(options.EntityPath))
+        {
+            Id = ConnectionProfile.CreateProfileId(),
+            SchemaVersion = ConnectionProfile.CurrentSchemaVersion,
+            CredentialReference = null
+        };
     }
 
     private static bool RequiresSanitization(string json)
@@ -183,15 +208,22 @@ public class SettingsService
     }
 
     private static bool IsSafe(AppSettings settings) =>
-        settings.SchemaVersion == AppSettings.CurrentSchemaVersion &&
-        settings.ConnectionHistory.All(profile =>
-            profile.SchemaVersion == ConnectionProfile.CurrentSchemaVersion &&
-            Uri.TryCreate(profile.NamespaceEndpoint, UriKind.Absolute, out var endpoint) &&
-            endpoint.Scheme.Equals("sb", StringComparison.OrdinalIgnoreCase) &&
-            !ContainsForbiddenMarker(profile.Label) &&
-            !ContainsForbiddenMarker(profile.NamespaceEndpoint) &&
-            !ContainsForbiddenMarker(profile.TenantId) &&
-            !ContainsForbiddenMarker(profile.EntityPath));
+        settings.SchemaVersion is >= 1 and <= AppSettings.CurrentSchemaVersion &&
+        settings.ConnectionHistory.All(IsSafeProfile);
+
+    private static bool IsSafeProfile(ConnectionProfile profile) =>
+        profile.SchemaVersion is >= ConnectionProfile.MinimumSupportedSchemaVersion
+            and <= ConnectionProfile.CurrentSchemaVersion &&
+        !string.IsNullOrWhiteSpace(profile.Id) &&
+        Uri.TryCreate(profile.NamespaceEndpoint, UriKind.Absolute, out var endpoint) &&
+        endpoint.Scheme.Equals("sb", StringComparison.OrdinalIgnoreCase) &&
+        !ContainsForbiddenMarker(profile.Label) &&
+        !ContainsForbiddenMarker(profile.NamespaceEndpoint) &&
+        !ContainsForbiddenMarker(profile.TenantId) &&
+        !ContainsForbiddenMarker(profile.EntityPath) &&
+        !ContainsForbiddenMarker(profile.Id) &&
+        (profile.CredentialReference is not { } reference ||
+         CredentialReference.IsOpaque(reference.Value));
 
     private static bool ContainsForbiddenMarker(string? value) =>
         value is not null &&
