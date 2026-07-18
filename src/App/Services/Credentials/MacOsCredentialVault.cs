@@ -1,6 +1,5 @@
 #nullable enable
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -10,7 +9,6 @@ namespace ServiceBusExplorer.App.Services.Credentials;
 /// First-party macOS login Keychain Services generic-password adapter.
 /// No file, DPAPI, or in-memory production fallback.
 /// </summary>
-[SupportedOSPlatform("macos")]
 public sealed class MacOsCredentialVault : ICredentialVault
 {
     internal const string ServiceName = "ServiceBusExplorer.SasCredential";
