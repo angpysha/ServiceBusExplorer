@@ -62,7 +62,7 @@ native-store-only behavior with no fallback file, corrupt/legacy history handlin
 and bounded resource browsing without contacting Azure.
 
 - [x] T007 [US1] Write failing profile and fake-vault lifecycle/failure tests first, then extend the T002 non-secret `ConnectionProfile` with optional CSPRNG opaque `CredentialReference`, add the non-serializable sensitive credential wrapper, typed vault outcomes, async `ICredentialVault` port, and defensive profile store ordering for store/retrieve/replace/delete failures without native dependencies in `tests/Unit/Connections/ConnectionProfileAndVaultContractTests.cs`, `src/Core/Contracts/Connection.cs`, `src/Core/Contracts/IConnectionProfileStore.cs`, `src/Core/Contracts/ICredentialVault.cs`, `src/Core/Models/CredentialVault.cs`, `src/App/SettingsService.cs`, and `src/App/Services/JsonConnectionProfileStore.cs`
-- [ ] T008 [P] [US1] Spike first-party native adapters versus a pinned maintained package, keep `ktsu.CredentialCache` 1.2.3 rejected, record license/maintenance/transitive/native-code/supply-chain/fallback review, and create a reusable no-file-fallback conformance/smoke harness before any production dependency is approved in `_code_agent/20260716-safe-servicebus-mvp/artifacts/tasks/T008/native-vault-evaluation.md`, `tests/PlatformVault/ServiceBusExplorer.PlatformVaultTests.csproj`, and `tests/PlatformVault/CredentialVaultConformance.cs`
+- [x] T008 [P] [US1] Spike first-party native adapters versus a pinned maintained package, keep `ktsu.CredentialCache` 1.2.3 rejected, record license/maintenance/transitive/native-code/supply-chain/fallback review, and create a reusable no-file-fallback conformance/smoke harness before any production dependency is approved in `_code_agent/20260716-safe-servicebus-mvp/artifacts/tasks/T008/native-vault-evaluation.md`, `tests/PlatformVault/ServiceBusExplorer.PlatformVaultTests.csproj`, and `tests/PlatformVault/CredentialVaultConformance.cs`
 - [ ] T009 [P] [US1] After native-vault security and human approval, write Windows failure/restart smoke tests first, then implement the T008-approved package wrapper or first-party current-user Windows Credential Manager adapter with store/retrieve/replace/delete, typed error mapping, secret-safe memory handling, and no file or DPAPI fallback in `tests/PlatformVault/WindowsCredentialVaultSmokeTests.cs` and `src/App/Services/Credentials/WindowsCredentialVault.cs`
 - [ ] T010 [P] [US1] After native-vault security and human approval, write macOS failure/restart smoke tests first, then implement the T008-approved package wrapper or first-party login Keychain Services generic-password adapter with store/retrieve/replace/delete, typed error mapping, secret-safe memory handling, and no file fallback in `tests/PlatformVault/MacOsCredentialVaultSmokeTests.cs` and `src/App/Services/Credentials/MacOsCredentialVault.cs`
 - [ ] T011 [P] [US1] After native-vault security and human approval, write Linux provider/failure/restart smoke tests first, then implement the T008-approved package wrapper or first-party freedesktop Secret Service adapter through libsecret or a compatible provider with store/retrieve/replace/delete, D-Bus/provider-missing mapping, secret-safe memory handling, and no file/in-memory fallback in `tests/PlatformVault/LinuxCredentialVaultSmokeTests.cs` and `src/App/Services/Credentials/LinuxCredentialVault.cs`
@@ -73,6 +73,12 @@ and bounded resource browsing without contacting Azure.
 **Native vault decision review**: Security reviewer and human approve the T008 build-versus-package
 decision before T009–T011, then review the resulting package/native adapter diffs and OS smoke
 evidence before T013 integration. No dependency or adapter proceeds on an unapproved decision.
+
+**T008 spike status (2026-07-18)**: Complete. Recommendation is **first-party native adapters**;
+`ktsu.CredentialCache` 1.2.3 remains rejected; no NuGet package approved. Evidence:
+`docs/sdlc/design/T008-native-vault-evaluation.md` and
+`tests/PlatformVault/CredentialVaultConformance.cs`. **Awaiting security + human approval**
+before T009–T011.
 
 **Milestone review — connection**: Human reviews credential boundaries, all three native-vault
 smoke results, proof of no fallback file, auth failure tests, profile JSON evidence, scope behavior,
