@@ -3,7 +3,10 @@
 **Feature**: `001-safe-servicebus-mvp` / `ServiceBusExplorer-m7n`  
 **Task**: T008  
 **Date**: 2026-07-18  
-**Status**: Spike complete — **recommendation pending security + human approval** before T009–T011
+**Status**: **Approved** for first-party native adapters (2026-07-18)  
+**Approved by**: Andrii Petrovskyi  
+**Package status**: No NuGet vault package approved; `ktsu.CredentialCache` 1.2.3 remains rejected  
+**Next**: T009 / T010 / T011 first-party adapters + OS smoke via `CredentialVaultConformance`
 
 ## Purpose
 
