@@ -43,6 +43,10 @@ settings/history, SAS re-entry and absent vault UI, actual Send destinations, co
 duration inventory, and internal-build labeling before any executable is shared or native-vault work
 starts. This checkpoint is not a beads task.
 
+**Status (2026-07-18)**: Approved by Andrii Petrovskyi. Evidence:
+`docs/sdlc/reviews/first-internal-gate-approval.md`.
+Phase 2 / US1 (T007+) is authorized to start.
+
 ---
 
 ## Phase 2: Connect Safely and Browse — User Story 1 (Priority: P1)
