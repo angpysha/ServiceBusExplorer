@@ -85,6 +85,7 @@ public class AppBootstrapper : IDisposable
 
         sc.AddSingleton(_liveContext);
         sc.AddSingleton<INamespaceService, NamespaceService>();
+        sc.AddSingleton<IServiceBusAdminAdapter, ServiceBusAdminAdapter>();
         sc.AddSingleton<IQueueService, QueueService>();
         sc.AddSingleton<IServiceBusPeekAdapter, ServiceBusPeekAdapter>();
         sc.AddSingleton<IServiceBusReceiveAdapter, ServiceBusReceiveAdapter>();
@@ -93,6 +94,7 @@ public class AppBootstrapper : IDisposable
         sc.AddSingleton<IMessageReceiveService, MessageReceiveService>();
         sc.AddSingleton<IPurgeService, PurgeService>();
         sc.AddSingleton<ITopicService, TopicService>();
+        sc.AddSingleton<ISubscriptionAdministrationAdapter, ServiceBusSubscriptionAdministrationAdapter>();
         sc.AddSingleton<ISubscriptionService, SubscriptionService>();
         sc.AddSingleton<IRelayService, RelayService>();
         sc.AddSingleton<IEventHubService>(sp =>

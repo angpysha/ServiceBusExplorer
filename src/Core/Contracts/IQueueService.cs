@@ -5,9 +5,15 @@ public interface IQueueService
 {
     Task<IReadOnlyList<QueueInfo>> ListAsync(CancellationToken ct = default);
     Task<QueueInfo> GetAsync(string name, CancellationToken ct = default);
-    Task<QueueInfo> CreateAsync(CreateQueueOptions opts, CancellationToken ct = default);
-    Task<QueueInfo> UpdateAsync(QueueInfo updated, CancellationToken ct = default);
-    Task DeleteAsync(string name, CancellationToken ct = default);
+    Task<EntityLifecycleResult<QueueInfo>> CreateAsync(
+        CreateQueueOptions opts,
+        CancellationToken ct = default);
+    Task<EntityLifecycleResult<QueueInfo>> UpdateAsync(
+        QueueInfo updated,
+        CancellationToken ct = default);
+    Task<EntityLifecycleResult<QueueInfo?>> DeleteAsync(
+        string name,
+        CancellationToken ct = default);
     Task<IReadOnlyList<ReceivedMessage>> PeekAsync(
         string name,
         int maxCount,

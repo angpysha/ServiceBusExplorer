@@ -92,14 +92,19 @@ public class SubscriptionListViewModel : ReactiveObject
 
         CreateCommand = ReactiveCommand.CreateFromTask<CreateSubscriptionOptions, SubscriptionInfo>(async opts =>
         {
-            var created = await _svc.CreateAsync(opts);
-            _source.Add(created);
-            return created;
+            var result = await _svc.CreateAsync(opts);
+            if (!result.IsSuccess || result.Entity is null)
+                throw new InvalidOperationException(result.SafeMessage);
+            _source.Add(result.Entity);
+            return result.Entity;
         });
 
         DeleteCommand = ReactiveCommand.CreateFromTask<string, Unit>(async name =>
         {
-            await _svc.DeleteAsync(_topicName, name);
+            var existing = _source.Items.FirstOrDefault(s => s.Name == name);
+            var result = await _svc.DeleteAsync(_topicName, name, existing?.ServiceVersion);
+            if (!result.IsSuccess)
+                throw new InvalidOperationException(result.SafeMessage);
             _source.Edit(list =>
             {
                 var item = list.FirstOrDefault(s => s.Name == name);
@@ -119,8 +124,10 @@ public class SubscriptionListViewModel : ReactiveObject
             n => !string.IsNullOrWhiteSpace(n));
         QuickCreateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            var created = await _svc.CreateAsync(new CreateSubscriptionOptions(_topicName, NewSubscriptionName));
-            _source.Add(created);
+            var result = await _svc.CreateAsync(new CreateSubscriptionOptions(_topicName, NewSubscriptionName));
+            if (!result.IsSuccess || result.Entity is null)
+                throw new InvalidOperationException(result.SafeMessage);
+            _source.Add(result.Entity);
             IsCreating = false;
             NewSubscriptionName = "";
         }, canQuickCreate);

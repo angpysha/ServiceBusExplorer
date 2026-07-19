@@ -216,13 +216,13 @@ public class PurgeConfirmationTests
         public Task<QueueInfo> GetAsync(string name, CancellationToken ct = default) =>
             Task.FromException<QueueInfo>(new InvalidOperationException("Not required by this test."));
 
-        public Task<QueueInfo> CreateAsync(CreateQueueOptions opts, CancellationToken ct = default) =>
+        public Task<EntityLifecycleResult<QueueInfo>> CreateAsync(CreateQueueOptions opts, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<QueueInfo> UpdateAsync(QueueInfo updated, CancellationToken ct = default) =>
+        public Task<EntityLifecycleResult<QueueInfo>> UpdateAsync(QueueInfo updated, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task DeleteAsync(string name, CancellationToken ct = default) =>
+        public Task<EntityLifecycleResult<QueueInfo?>> DeleteAsync(string name, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<ReceivedMessage>> PeekAsync(
@@ -265,39 +265,48 @@ public class PurgeConfirmationTests
             Task.FromException<SubscriptionInfo>(
                 new InvalidOperationException("Not required by this test."));
 
-        public Task<SubscriptionInfo> CreateAsync(
+        public Task<EntityLifecycleResult<SubscriptionInfo>> CreateAsync(
             CreateSubscriptionOptions opts,
             CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<SubscriptionInfo> UpdateAsync(
+        public Task<EntityLifecycleResult<SubscriptionInfo>> UpdateAsync(
             SubscriptionInfo updated,
             CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task DeleteAsync(
+        public Task<EntityLifecycleResult<SubscriptionInfo?>> DeleteAsync(
             string topicName,
             string name,
+            string? expectedVersion = null,
             CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyList<RuleInfo>> ListRulesAsync(
+        public Task<IReadOnlyList<SubscriptionRule>> ListRulesAsync(
             string topicName,
             string subscriptionName,
             CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<RuleInfo>>([]);
+            Task.FromResult<IReadOnlyList<SubscriptionRule>>([]);
 
-        public Task<RuleInfo> CreateRuleAsync(
+        public Task<EntityLifecycleResult<SubscriptionRule>> CreateRuleAsync(
             string topicName,
             string subscriptionName,
-            CreateRuleOptions opts,
+            CreateSubscriptionRuleOptions opts,
             CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task DeleteRuleAsync(
+        public Task<EntityLifecycleResult<SubscriptionRule>> UpdateRuleAsync(
+            string topicName,
+            string subscriptionName,
+            SubscriptionRule updated,
+            CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<EntityLifecycleResult<SubscriptionRule?>> DeleteRuleAsync(
             string topicName,
             string subscriptionName,
             string ruleName,
+            string? expectedVersion = null,
             CancellationToken ct = default) =>
             throw new NotSupportedException();
     }

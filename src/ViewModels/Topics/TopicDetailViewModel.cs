@@ -183,7 +183,11 @@ public class TopicDetailViewModel : ReactiveObject
                     EnableBatchedOperations = EnableBatchedOperations,
                     UserMetadata = UserMetadata,
                 };
-                Topic = await _topicSvc.UpdateAsync(updated);
+                var result = await _topicSvc.UpdateAsync(updated);
+                if (result.IsSuccess && result.Entity is not null)
+                    Topic = result.Entity;
+                else
+                    SaveError = result.SafeMessage;
             }
             catch (Exception ex)
             {

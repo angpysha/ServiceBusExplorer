@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="ServiceBusExplorer.ContractTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\ServiceBus\ServiceBus.csproj" />
     <ProjectReference Include="..\EventHubs\EventHubs.csproj" />

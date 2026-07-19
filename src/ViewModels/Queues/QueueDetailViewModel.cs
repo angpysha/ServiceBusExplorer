@@ -422,7 +422,11 @@ public class QueueDetailViewModel : ReactiveObject
                     ForwardDeadLetteredMessagesTo = ForwardDeadLetteredMessagesTo,
                     UserMetadata = UserMetadata,
                 };
-                Queue = await _svc.UpdateAsync(updated);
+                var result = await _svc.UpdateAsync(updated);
+                if (result.IsSuccess && result.Entity is not null)
+                    Queue = result.Entity;
+                else
+                    SaveError = result.SafeMessage;
             }
             catch (Exception ex)
             {

@@ -14,7 +14,9 @@ public record TopicInfo(
     long MaxSizeInMegabytes = 1024,
     string? UserMetadata = null,
     TimeSpan DuplicateDetectionHistoryTimeWindow = default,
-    bool RequiresDuplicateDetection = false);
+    bool RequiresDuplicateDetection = false,
+    /// <summary>Last-observed opaque service version/etag for optimistic concurrency.</summary>
+    string? ServiceVersion = null);
 
 public record CreateTopicOptions(
     string Name,

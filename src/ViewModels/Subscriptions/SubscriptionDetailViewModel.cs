@@ -432,7 +432,17 @@ public class SubscriptionDetailViewModel : ReactiveObject
                     ForwardDeadLetteredMessagesTo = ForwardDeadLetteredMessagesTo,
                     UserMetadata = UserMetadata,
                 };
-                Info = await _subSvc.UpdateAsync(updated);
+                var result = await _subSvc.UpdateAsync(updated);
+                if (result.IsSuccess && result.Entity is not null)
+                {
+                    Info = result.Entity;
+                }
+                else
+                {
+                    if (result.Kind == EntityLifecycleKind.Conflict && result.Entity is not null)
+                        Info = result.Entity;
+                    SaveError = result.SafeMessage;
+                }
             }
             catch (Exception ex)
             {

@@ -4,7 +4,7 @@
              xmlns:domain="using:ServiceBusExplorer"
              x:DataType="vm:RuleListViewModel"
              x:Class="ServiceBusExplorer.App.Views.Subscriptions.RuleListView">
-  <Grid RowDefinitions="Auto,Auto,Auto,*">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
 
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
       <TextBlock Text="Filters / Rules" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -13,6 +13,10 @@
               Command="{Binding BeginCreateCommand}"
               AutomationProperties.Name="Add subscription rule"
               AutomationProperties.HelpText="Opens the form for a new filter or rule." />
+      <Button Content="Edit"
+              Command="{Binding BeginEditCommand}"
+              IsEnabled="{Binding SelectedRule, Converter={x:Static ObjectConverters.IsNotNull}}"
+              AutomationProperties.Name="Edit selected subscription rule" />
       <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
                  Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                  VerticalAlignment="Center" />
@@ -36,9 +40,16 @@
         <TextBlock Text="Rule Name" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
         <TextBox Text="{Binding NewRuleName}" Watermark="e.g. my-filter" />
         <TextBlock Text="Filter Type" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-        <ComboBox ItemsSource="{Binding FilterTypes}" SelectedItem="{Binding NewRuleFilterType}" />
+        <ComboBox ItemsSource="{Binding FilterKinds}" SelectedItem="{Binding NewRuleFilterKind}" />
         <TextBlock Text="Expression" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-        <TextBox Text="{Binding NewRuleExpression}" Watermark="1=1" />
+        <TextBox Text="{Binding NewRuleExpression}"
+                 Watermark="SQL or correlation id"
+                 IsEnabled="{Binding !IsNewRuleCatchAll}" />
+        <TextBlock Text="Catch-all matches all messages (True filter). Do not enter SQL 1=1 for catch-all."
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   IsVisible="{Binding IsNewRuleCatchAll}" />
         <StackPanel Orientation="Horizontal" Spacing="8">
           <Button Content="Add" Command="{Binding CreateCommand}" />
           <Button Content="Cancel" Command="{Binding CancelCreateCommand}" />
@@ -46,21 +57,51 @@
       </StackPanel>
     </Border>
 
+    <!-- Edit form -->
+    <Border Grid.Row="3"
+            IsVisible="{Binding IsEditing}"
+            Margin="0,0,0,8"
+            Padding="10"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            CornerRadius="4">
+      <StackPanel Spacing="6">
+        <TextBlock Text="Edit Filter Type" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        <ComboBox ItemsSource="{Binding FilterKinds}" SelectedItem="{Binding EditFilterKind}" />
+        <TextBlock Text="Expression" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        <TextBox Text="{Binding EditExpression}"
+                 Watermark="SQL or correlation id"
+                 IsEnabled="{Binding !IsEditRuleCatchAll}" />
+        <TextBlock Text="Catch-all matches all messages (True filter)."
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   IsVisible="{Binding IsEditRuleCatchAll}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Save" Command="{Binding SaveEditCommand}" />
+          <Button Content="Cancel" Command="{Binding CancelEditCommand}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
     <!-- Rules list -->
-    <ListBox Grid.Row="3"
+    <ListBox Grid.Row="4"
              ItemsSource="{Binding Rules}"
              SelectedItem="{Binding SelectedRule}"
              Background="Transparent"
              BorderThickness="0">
       <ListBox.ItemTemplate>
-        <DataTemplate DataType="{x:Type domain:RuleInfo}">
-          <Grid ColumnDefinitions="*,*,Auto">
+        <DataTemplate DataType="{x:Type domain:SubscriptionRule}">
+          <Grid ColumnDefinitions="*,*,Auto,Auto">
             <TextBlock Grid.Column="0" Text="{Binding Name}" Padding="4,2" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Text="{Binding Filter}" Padding="4,2" VerticalAlignment="Center"
+            <TextBlock Grid.Column="1" Text="{Binding FilterDisplay}" Padding="4,2" VerticalAlignment="Center"
                        FontFamily="Cascadia Code,Consolas,monospace"
                        Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                        TextTrimming="CharacterEllipsis" />
-            <Button Grid.Column="2" Content="Delete"
+            <TextBlock Grid.Column="2" Text="{Binding FilterKind}" Padding="4,2" VerticalAlignment="Center"
+                       FontSize="11"
+                       Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+            <Button Grid.Column="3" Content="Delete"
                     Command="{Binding $parent[ListBox].((vm:RuleListViewModel)DataContext).DeleteCommand}"
                     CommandParameter="{Binding Name}"
                     Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"

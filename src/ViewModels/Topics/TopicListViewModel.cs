@@ -158,14 +158,18 @@ public class TopicListViewModel : ReactiveObject
 
         CreateCommand = ReactiveCommand.CreateFromTask<CreateTopicOptions, TopicInfo>(async opts =>
         {
-            var created = await _svc.CreateAsync(opts);
-            _source.Add(created);
-            return created;
+            var result = await _svc.CreateAsync(opts);
+            if (!result.IsSuccess || result.Entity is null)
+                throw new InvalidOperationException(result.SafeMessage);
+            _source.Add(result.Entity);
+            return result.Entity;
         });
 
         DeleteCommand = ReactiveCommand.CreateFromTask<string, Unit>(async name =>
         {
-            await _svc.DeleteAsync(name);
+            var result = await _svc.DeleteAsync(name);
+            if (!result.IsSuccess)
+                throw new InvalidOperationException(result.SafeMessage);
             _source.Edit(list =>
             {
                 var item = list.FirstOrDefault(t => t.Name == name);
@@ -185,8 +189,10 @@ public class TopicListViewModel : ReactiveObject
             n => !string.IsNullOrWhiteSpace(n));
         QuickCreateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            var created = await _svc.CreateAsync(new CreateTopicOptions(NewTopicName));
-            _source.Add(created);
+            var result = await _svc.CreateAsync(new CreateTopicOptions(NewTopicName));
+            if (!result.IsSuccess || result.Entity is null)
+                throw new InvalidOperationException(result.SafeMessage);
+            _source.Add(result.Entity);
             IsCreating = false;
             NewTopicName = "";
         }, canQuickCreate);

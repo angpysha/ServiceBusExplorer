@@ -245,13 +245,13 @@ public class MessageDraftTests
         public Task<QueueInfo> GetAsync(string name, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<QueueInfo> CreateAsync(CreateQueueOptions opts, CancellationToken ct = default) =>
+        public Task<EntityLifecycleResult<QueueInfo>> CreateAsync(CreateQueueOptions opts, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<QueueInfo> UpdateAsync(QueueInfo updated, CancellationToken ct = default) =>
+        public Task<EntityLifecycleResult<QueueInfo>> UpdateAsync(QueueInfo updated, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task DeleteAsync(string name, CancellationToken ct = default) =>
+        public Task<EntityLifecycleResult<QueueInfo?>> DeleteAsync(string name, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<ReceivedMessage>> PeekAsync(
