@@ -7,11 +7,16 @@ namespace ServiceBusExplorer.ViewModels;
 
 public class TopicListViewModel : ReactiveObject
 {
+    private readonly INamespaceService _namespaceService;
     private readonly ITopicService _svc;
     private readonly ISubscriptionService _subSvc;
     private readonly IQueueService _queueSvc;
     private readonly IConfirmationService _confirmationService;
     private readonly SourceList<TopicInfo> _source = new();
+    private ConnectionScope _scope = ConnectionScope.Namespace;
+    private CapabilitySet _capabilities = CapabilitySet.ForNamespaceScope(adminProbeSucceeded: false);
+    private string? _entityPath;
+    private ScopedEntityKind _entityKind = ScopedEntityKind.None;
     private bool _isLoading;
     private string? _error;
     private TopicInfo? _selectedTopic;
@@ -65,15 +70,24 @@ public class TopicListViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> QuickCreateCommand { get; }
 
     public TopicListViewModel(
+        INamespaceService namespaceService,
         ITopicService svc,
         ISubscriptionService subSvc,
         IQueueService queueSvc,
-        IConfirmationService confirmationService)
+        IConfirmationService confirmationService,
+        LiveConnectionContext? liveContext = null)
     {
+        _namespaceService = namespaceService;
         _svc = svc;
         _subSvc = subSvc;
         _queueSvc = queueSvc;
         _confirmationService = confirmationService;
+
+        if (liveContext is not null)
+            ApplyConnectionScope(
+                liveContext.Scope,
+                liveContext.EntityPath,
+                liveContext.Capabilities);
 
         _source.Connect()
             .Bind(out var bound)
@@ -102,17 +116,26 @@ public class TopicListViewModel : ReactiveObject
             Error = null;
             try
             {
-                var items = await _svc.ListAsync();
+                var result = await _namespaceService.BrowseTopicsAsync(
+                    new NamespaceBrowseRequest(
+                        _scope,
+                        _entityPath,
+                        _capabilities,
+                        BrowseSurface.Topics,
+                        _entityKind));
+
                 _source.Edit(list =>
                 {
                     list.Clear();
-                    list.AddRange(items);
+                    list.AddRange(result.Items);
                 });
-                return items;
+                Error = result.GuidanceMessage;
+                return result.Items;
             }
             catch (Exception ex)
             {
                 Error = ex.Message;
+                _source.Edit(list => list.Clear());
                 return (IReadOnlyList<TopicInfo>)Array.Empty<TopicInfo>();
             }
             finally
@@ -155,5 +178,23 @@ public class TopicListViewModel : ReactiveObject
             IsCreating = false;
             NewTopicName = "";
         }, canQuickCreate);
+    }
+
+    public void ApplyConnectionScope(
+        ConnectionScope scope,
+        string? entityPath,
+        CapabilitySet capabilities,
+        ScopedEntityKind entityKind = ScopedEntityKind.None)
+    {
+        _scope = scope;
+        _entityPath = entityPath;
+        _capabilities = capabilities;
+        _entityKind = EntityScopeHelper.ParseKind(entityPath, entityKind);
+    }
+
+    public void ClearBrowseResults()
+    {
+        _source.Edit(list => list.Clear());
+        Error = null;
     }
 }

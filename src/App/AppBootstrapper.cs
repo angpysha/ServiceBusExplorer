@@ -83,6 +83,7 @@ public class AppBootstrapper : IDisposable
         if (handles.AdminClient is not null)
             sc.AddSingleton(handles.AdminClient);
 
+        sc.AddSingleton(_liveContext);
         sc.AddSingleton<INamespaceService, NamespaceService>();
         sc.AddSingleton<IQueueService, QueueService>();
         sc.AddSingleton<ITopicService, TopicService>();

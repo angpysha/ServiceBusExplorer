@@ -7,9 +7,14 @@ namespace ServiceBusExplorer.ViewModels;
 
 public class QueueListViewModel : ReactiveObject
 {
+    private readonly INamespaceService _namespaceService;
     private readonly IQueueService _svc;
     private readonly IConfirmationService _confirmationService;
     private readonly SourceList<QueueInfo> _source = new();
+    private ConnectionScope _scope = ConnectionScope.Namespace;
+    private CapabilitySet _capabilities = CapabilitySet.ForNamespaceScope(adminProbeSucceeded: false);
+    private string? _entityPath;
+    private ScopedEntityKind _entityKind = ScopedEntityKind.None;
     private bool _isLoading;
     private string? _error;
     private QueueInfo? _selectedQueue;
@@ -62,10 +67,21 @@ public class QueueListViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> CancelCreateCommand { get; }
     public ReactiveCommand<Unit, Unit> QuickCreateCommand { get; }
 
-    public QueueListViewModel(IQueueService svc, IConfirmationService confirmationService)
+    public QueueListViewModel(
+        INamespaceService namespaceService,
+        IQueueService svc,
+        IConfirmationService confirmationService,
+        LiveConnectionContext? liveContext = null)
     {
+        _namespaceService = namespaceService;
         _svc = svc;
         _confirmationService = confirmationService;
+
+        if (liveContext is not null)
+            ApplyConnectionScope(
+                liveContext.Scope,
+                liveContext.EntityPath,
+                liveContext.Capabilities);
 
         _source.Connect()
             .Bind(out var bound)
@@ -89,17 +105,26 @@ public class QueueListViewModel : ReactiveObject
             Error = null;
             try
             {
-                var items = await _svc.ListAsync();
+                var result = await _namespaceService.BrowseQueuesAsync(
+                    new NamespaceBrowseRequest(
+                        _scope,
+                        _entityPath,
+                        _capabilities,
+                        BrowseSurface.Queues,
+                        _entityKind));
+
                 _source.Edit(list =>
                 {
                     list.Clear();
-                    list.AddRange(items);
+                    list.AddRange(result.Items);
                 });
-                return items;
+                Error = result.GuidanceMessage;
+                return result.Items;
             }
             catch (Exception ex)
             {
                 Error = ex.Message;
+                _source.Edit(list => list.Clear());
                 return (IReadOnlyList<QueueInfo>)Array.Empty<QueueInfo>();
             }
             finally
@@ -142,5 +167,23 @@ public class QueueListViewModel : ReactiveObject
             IsCreating = false;
             NewQueueName = "";
         }, canQuickCreate);
+    }
+
+    public void ApplyConnectionScope(
+        ConnectionScope scope,
+        string? entityPath,
+        CapabilitySet capabilities,
+        ScopedEntityKind entityKind = ScopedEntityKind.None)
+    {
+        _scope = scope;
+        _entityPath = entityPath;
+        _capabilities = capabilities;
+        _entityKind = EntityScopeHelper.ParseKind(entityPath, entityKind);
+    }
+
+    public void ClearBrowseResults()
+    {
+        _source.Edit(list => list.Clear());
+        Error = null;
     }
 }
