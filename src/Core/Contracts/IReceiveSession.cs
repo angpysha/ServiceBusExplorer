@@ -26,15 +26,22 @@ public interface IReceiveSession : IAsyncDisposable
     Task<IReadOnlyList<ReceivedMessage>> ReceiveBatchAsync(
         int maxMessages = 20, TimeSpan? maxWait = null, CancellationToken ct = default);
 
-    /// <summary>Complete (delete) a received message.</summary>
-    Task CompleteAsync(ReceivedMessage message, CancellationToken ct = default);
+    /// <summary>
+    /// Current settlement state for a received message (refreshes lock expiry).
+    /// Unknown tokens are <see cref="SettlementState.Ineligible"/>.
+    /// </summary>
+    SettlementState GetSettlementState(ReceivedMessage message, DateTimeOffset? utcNow = null);
+
+    /// <summary>Complete (delete) a received message — single attempt, typed outcome.</summary>
+    Task<SettlementItemOutcome> CompleteAsync(ReceivedMessage message, CancellationToken ct = default);
 
     /// <summary>Abandon a message — it becomes visible again for redelivery.</summary>
-    Task AbandonAsync(ReceivedMessage message, CancellationToken ct = default);
+    Task<SettlementItemOutcome> AbandonAsync(ReceivedMessage message, CancellationToken ct = default);
 
     /// <summary>Move a message to the dead-letter sub-queue.</summary>
-    Task DeadLetterAsync(ReceivedMessage message, string? reason = null, CancellationToken ct = default);
+    Task<SettlementItemOutcome> DeadLetterAsync(
+        ReceivedMessage message, string? reason = null, CancellationToken ct = default);
 
     /// <summary>Defer a message — it must be received explicitly by sequence number.</summary>
-    Task DeferAsync(ReceivedMessage message, CancellationToken ct = default);
+    Task<SettlementItemOutcome> DeferAsync(ReceivedMessage message, CancellationToken ct = default);
 }

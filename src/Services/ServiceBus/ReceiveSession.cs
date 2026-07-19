@@ -6,12 +6,15 @@ namespace ServiceBusExplorer.Services;
 /// Wraps a live <see cref="ServiceBusReceiver"/> in PeekLock mode so that
 /// received messages can be settled (completed, abandoned, dead-lettered, deferred)
 /// using the same receiver that received them — a requirement of the Azure SDK.
+/// Enforces settlement eligibility: peeked/unknown, expired, lost, and terminal locks
+/// are rejected without a second broker attempt.
 /// </summary>
 internal sealed class ReceiveSession : IReceiveSession
 {
     private readonly ServiceBusReceiver _receiver;
     // Map lock-token → original SDK message, needed for settlement calls
     private readonly Dictionary<string, ServiceBusReceivedMessage> _pending = new();
+    private readonly SettlementTracker _tracker = new();
     private readonly CancellationTokenSource _abortCts = new();
     private int _disposed;
 
@@ -54,51 +57,38 @@ internal sealed class ReceiveSession : IReceiveSession
         foreach (var m in msgs)
         {
             _pending[m.LockToken] = m;
+            _tracker.Register(m.LockToken, m.LockedUntil);
             result.Add(MapMessage(m));
         }
         return result;
     }
 
-    public async Task CompleteAsync(ReceivedMessage message, CancellationToken ct = default)
+    public SettlementState GetSettlementState(ReceivedMessage message, DateTimeOffset? utcNow = null)
     {
-        ThrowIfDisposed();
-        if (message.LockToken != null && _pending.TryGetValue(message.LockToken, out var m))
-        {
-            await _receiver.CompleteMessageAsync(m, ct);
-            _pending.Remove(message.LockToken);
-        }
+        ArgumentNullException.ThrowIfNull(message);
+        return _tracker.GetState(message.LockToken, utcNow ?? DateTimeOffset.UtcNow);
     }
 
-    public async Task AbandonAsync(ReceivedMessage message, CancellationToken ct = default)
-    {
-        ThrowIfDisposed();
-        if (message.LockToken != null && _pending.TryGetValue(message.LockToken, out var m))
-        {
-            await _receiver.AbandonMessageAsync(m, cancellationToken: ct);
-            _pending.Remove(message.LockToken);
-        }
-    }
+    public Task<SettlementItemOutcome> CompleteAsync(
+        ReceivedMessage message, CancellationToken ct = default) =>
+        SettleAsync(message, SettlementAction.Complete, ct,
+            (sdk, token) => _receiver.CompleteMessageAsync(sdk, token));
 
-    public async Task DeadLetterAsync(ReceivedMessage message, string? reason = null,
-        CancellationToken ct = default)
-    {
-        ThrowIfDisposed();
-        if (message.LockToken != null && _pending.TryGetValue(message.LockToken, out var m))
-        {
-            await _receiver.DeadLetterMessageAsync(m, deadLetterReason: reason, cancellationToken: ct);
-            _pending.Remove(message.LockToken);
-        }
-    }
+    public Task<SettlementItemOutcome> AbandonAsync(
+        ReceivedMessage message, CancellationToken ct = default) =>
+        SettleAsync(message, SettlementAction.Abandon, ct,
+            (sdk, token) => _receiver.AbandonMessageAsync(sdk, cancellationToken: token));
 
-    public async Task DeferAsync(ReceivedMessage message, CancellationToken ct = default)
-    {
-        ThrowIfDisposed();
-        if (message.LockToken != null && _pending.TryGetValue(message.LockToken, out var m))
-        {
-            await _receiver.DeferMessageAsync(m, cancellationToken: ct);
-            _pending.Remove(message.LockToken);
-        }
-    }
+    public Task<SettlementItemOutcome> DeadLetterAsync(
+        ReceivedMessage message, string? reason = null, CancellationToken ct = default) =>
+        SettleAsync(message, SettlementAction.DeadLetter, ct,
+            (sdk, token) => _receiver.DeadLetterMessageAsync(
+                sdk, deadLetterReason: reason, cancellationToken: token));
+
+    public Task<SettlementItemOutcome> DeferAsync(
+        ReceivedMessage message, CancellationToken ct = default) =>
+        SettleAsync(message, SettlementAction.Defer, ct,
+            (sdk, token) => _receiver.DeferMessageAsync(sdk, cancellationToken: token));
 
     public async ValueTask DisposeAsync()
     {
@@ -116,6 +106,45 @@ internal sealed class ReceiveSession : IReceiveSession
 
         await _receiver.DisposeAsync();
         _abortCts.Dispose();
+    }
+
+    private async Task<SettlementItemOutcome> SettleAsync(
+        ReceivedMessage message,
+        SettlementAction action,
+        CancellationToken ct,
+        Func<ServiceBusReceivedMessage, CancellationToken, Task> brokerSettle)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(message);
+
+        var rejection = _tracker.TryBegin(message, action, DateTimeOffset.UtcNow);
+        if (rejection is not null)
+            return rejection;
+
+        if (message.LockToken is null || !_pending.TryGetValue(message.LockToken, out var sdkMessage))
+        {
+            return _tracker.MarkFailed(
+                message,
+                action,
+                "Message lock is not held by this receive session.");
+        }
+
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _abortCts.Token);
+            await brokerSettle(sdkMessage, linked.Token);
+            _pending.Remove(message.LockToken);
+            return _tracker.MarkSucceeded(message, action);
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessageLockLost)
+        {
+            _pending.Remove(message.LockToken);
+            return _tracker.MarkLockLost(message, action);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return _tracker.MarkFailed(message, action, "Settlement failed: " + ex.Message);
+        }
     }
 
     private void ThrowIfDisposed()

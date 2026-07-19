@@ -89,5 +89,8 @@ public sealed class MessageBrowseService : IMessageBrowseService
             message.ApplicationProperties.ToDictionary(static kv => kv.Key, static kv => kv.Value),
             message.SessionId,
             message.CorrelationId,
-            message.DeadLetterReason);
+            message.DeadLetterReason,
+            SettlementState: SettlementState.Peeked,
+            LockedUntil: null,
+            LockToken: null);
 }

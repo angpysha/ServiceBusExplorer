@@ -105,4 +105,45 @@ public interface IMessageReceiveService
     Task<ReceiveAndDeleteResult> ReceiveAndDeleteAsync(
         ConfirmedReceiveAndDeleteRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Rejects settlement of peeked observed messages without invoking the receive session.
+    /// </summary>
+    SettlementItemOutcome RejectPeekedSettlement(ObservedMessage message, SettlementAction action);
+
+    /// <summary>Single-attempt complete against the live peek-lock session.</summary>
+    Task<SettlementItemOutcome> CompleteAsync(
+        IReceiveSession session,
+        ReceivedMessage message,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Single-attempt abandon against the live peek-lock session.</summary>
+    Task<SettlementItemOutcome> AbandonAsync(
+        IReceiveSession session,
+        ReceivedMessage message,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Single-attempt defer against the live peek-lock session.</summary>
+    Task<SettlementItemOutcome> DeferAsync(
+        IReceiveSession session,
+        ReceivedMessage message,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Single-attempt dead-letter against the live peek-lock session.</summary>
+    Task<SettlementItemOutcome> DeadLetterAsync(
+        IReceiveSession session,
+        ReceivedMessage message,
+        string? reason = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Settles each message once for <paramref name="action"/>. Partial outcomes are returned;
+    /// confirmed successes MUST NOT be automatically repeated by callers.
+    /// </summary>
+    Task<SettlementBatchOutcome> SettleBatchAsync(
+        IReceiveSession session,
+        IReadOnlyList<ReceivedMessage> messages,
+        SettlementAction action,
+        string? deadLetterReason = null,
+        CancellationToken cancellationToken = default);
 }

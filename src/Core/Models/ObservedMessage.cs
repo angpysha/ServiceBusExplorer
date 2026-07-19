@@ -57,7 +57,27 @@ public sealed record ObservedMessage(
     IReadOnlyDictionary<string, object> Properties,
     string? SessionId,
     string? CorrelationId = null,
-    string? DeadLetterReason = null);
+    string? DeadLetterReason = null,
+    SettlementState SettlementState = SettlementState.Peeked,
+    DateTimeOffset? LockedUntil = null,
+    string? LockToken = null)
+{
+    /// <summary>
+    /// True when the message is currently eligible for settlement at <paramref name="utcNow"/>.
+    /// Peeked, expired, lost, and terminal messages are never settleable.
+    /// </summary>
+    public bool IsSettleableAt(DateTimeOffset utcNow)
+    {
+        var effective = SettlementState;
+        if (ReceiveKind == MessageReceiveKind.Peeked || SettlementState == SettlementState.Peeked)
+        {
+            effective = SettlementState.Peeked;
+        }
+
+        effective = SettlementStateMachine.RefreshForClock(effective, LockedUntil, utcNow);
+        return SettlementStateMachine.CanSettle(effective);
+    }
+}
 
 /// <summary>
 /// Identifies a queue or subscription entity path for browse operations.

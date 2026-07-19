@@ -245,18 +245,21 @@ public sealed class MessageReceiveContractTests
             return Task.FromResult<IReadOnlyList<ReceivedMessage>>([]);
         }
 
-        public Task CompleteAsync(ReceivedMessage message, CancellationToken ct = default) =>
-            Task.CompletedTask;
+        public Task<SettlementItemOutcome> CompleteAsync(ReceivedMessage message, CancellationToken ct = default) =>
+            Task.FromResult(Succeeded(message, SettlementAction.Complete));
 
-        public Task AbandonAsync(ReceivedMessage message, CancellationToken ct = default) =>
-            Task.CompletedTask;
+        public Task<SettlementItemOutcome> AbandonAsync(ReceivedMessage message, CancellationToken ct = default) =>
+            Task.FromResult(Succeeded(message, SettlementAction.Abandon));
 
-        public Task DeadLetterAsync(
+        public Task<SettlementItemOutcome> DeadLetterAsync(
             ReceivedMessage message, string? reason = null, CancellationToken ct = default) =>
-            Task.CompletedTask;
+            Task.FromResult(Succeeded(message, SettlementAction.DeadLetter));
 
-        public Task DeferAsync(ReceivedMessage message, CancellationToken ct = default) =>
-            Task.CompletedTask;
+        public Task<SettlementItemOutcome> DeferAsync(ReceivedMessage message, CancellationToken ct = default) =>
+            Task.FromResult(Succeeded(message, SettlementAction.Defer));
+
+        public SettlementState GetSettlementState(ReceivedMessage message, DateTimeOffset? utcNow = null) =>
+            SettlementState.Locked;
 
         public ValueTask DisposeAsync()
         {
@@ -266,5 +269,16 @@ public sealed class MessageReceiveContractTests
             _abortCts.Dispose();
             return ValueTask.CompletedTask;
         }
+
+        private static SettlementItemOutcome Succeeded(ReceivedMessage message, SettlementAction action) =>
+            new(
+                message.MessageId,
+                message.SequenceNumber,
+                action,
+                SettlementResultKind.Succeeded,
+                SettlementState.Locked,
+                SettlementStateMachine.AfterSuccessfulAction(action),
+                $"Settlement {action} succeeded.",
+                message.LockToken);
     }
 }

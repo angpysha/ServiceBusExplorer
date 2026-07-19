@@ -4,9 +4,8 @@ using Microsoft.Extensions.Logging;
 namespace ServiceBusExplorer.Services;
 
 /// <summary>
-/// Explicit-source peek-lock and confirmed receive-and-delete orchestration.
-/// Settlement eligibility remains owned by later tasks; this service opens handles and
-/// enforces that receive-and-delete only runs with outside confirmation evidence.
+/// Explicit-source peek-lock, confirmed receive-and-delete, and settlement orchestration.
+/// Settlement methods are single-attempt per currently eligible lock and return typed outcomes.
 /// </summary>
 public sealed class MessageReceiveService : IMessageReceiveService
 {
@@ -84,6 +83,105 @@ public sealed class MessageReceiveService : IMessageReceiveService
             SafeMessage: mapped.Count == 0
                 ? $"No messages received-and-deleted from {address.Path} ({source})."
                 : $"Permanently removed {mapped.Count} message(s) from {address.Path} ({source}). Display copies may be incomplete.");
+    }
+
+    public SettlementItemOutcome RejectPeekedSettlement(
+        ObservedMessage message,
+        SettlementAction action)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return SettlementTracker.RejectPeeked(message, action);
+    }
+
+    public Task<SettlementItemOutcome> CompleteAsync(
+        IReceiveSession session,
+        ReceivedMessage message,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(message);
+        return session.CompleteAsync(message, cancellationToken);
+    }
+
+    public Task<SettlementItemOutcome> AbandonAsync(
+        IReceiveSession session,
+        ReceivedMessage message,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(message);
+        return session.AbandonAsync(message, cancellationToken);
+    }
+
+    public Task<SettlementItemOutcome> DeferAsync(
+        IReceiveSession session,
+        ReceivedMessage message,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(message);
+        return session.DeferAsync(message, cancellationToken);
+    }
+
+    public Task<SettlementItemOutcome> DeadLetterAsync(
+        IReceiveSession session,
+        ReceivedMessage message,
+        string? reason = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(message);
+        return session.DeadLetterAsync(message, reason, cancellationToken);
+    }
+
+    public async Task<SettlementBatchOutcome> SettleBatchAsync(
+        IReceiveSession session,
+        IReadOnlyList<ReceivedMessage> messages,
+        SettlementAction action,
+        string? deadLetterReason = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(messages);
+
+        var outcomes = new List<SettlementItemOutcome>(messages.Count);
+        foreach (var message in messages)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Skip messages that already reached a confirmed success terminal in this session —
+            // never automatically repeat a successful settlement.
+            var state = session.GetSettlementState(message);
+            if (state is SettlementState.Completed
+                or SettlementState.Abandoned
+                or SettlementState.Deferred
+                or SettlementState.DeadLettered)
+            {
+                outcomes.Add(new SettlementItemOutcome(
+                    message.MessageId,
+                    message.SequenceNumber,
+                    action,
+                    SettlementResultKind.RejectedIneligible,
+                    state,
+                    state,
+                    SettlementStateMachine.DescribeIneligibility(state),
+                    message.LockToken));
+                continue;
+            }
+
+            var outcome = action switch
+            {
+                SettlementAction.Complete => await session.CompleteAsync(message, cancellationToken),
+                SettlementAction.Abandon => await session.AbandonAsync(message, cancellationToken),
+                SettlementAction.Defer => await session.DeferAsync(message, cancellationToken),
+                SettlementAction.DeadLetter => await session.DeadLetterAsync(
+                    message, deadLetterReason, cancellationToken),
+                _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
+            };
+            outcomes.Add(outcome);
+        }
+
+        return new SettlementBatchOutcome(outcomes);
     }
 
     private static ReceivedMessage MapMessage(Azure.Messaging.ServiceBus.ServiceBusReceivedMessage m) =>

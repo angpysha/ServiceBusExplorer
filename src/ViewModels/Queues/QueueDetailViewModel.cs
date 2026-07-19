@@ -43,6 +43,7 @@ public class QueueDetailViewModel : ReactiveObject
     private string? _userMetadata;
     private bool _isSaving;
     private string? _saveError;
+    private string? _settlementStatus;
 
     public QueueInfo? Queue
     {
@@ -66,16 +67,48 @@ public class QueueDetailViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _error, value);
     }
 
+    /// <summary>
+    /// Last settlement outcome presentation (success, rejected ineligible, or failure).
+    /// </summary>
+    public string? SettlementStatus
+    {
+        get => _settlementStatus;
+        private set => this.RaiseAndSetIfChanged(ref _settlementStatus, value);
+    }
+
+    /// <summary>
+    /// True when the selected peek-locked message is currently eligible to settle.
+    /// </summary>
+    public bool CanSettleSelectedMessage =>
+        _activeSession is not null
+        && SelectedMessage is not null
+        && SettlementStateMachine.CanSettle(_activeSession.GetSettlementState(SelectedMessage));
+
+    /// <summary>
+    /// Peeked browse messages are never settleable.
+    /// </summary>
+    public bool CanSettleSelectedObservedMessage =>
+        SelectedObservedMessage is not null
+        && SelectedObservedMessage.IsSettleableAt(DateTimeOffset.UtcNow);
+
     public ReceivedMessage? SelectedMessage
     {
         get => _selectedMessage;
-        set => this.RaiseAndSetIfChanged(ref _selectedMessage, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedMessage, value);
+            this.RaisePropertyChanged(nameof(CanSettleSelectedMessage));
+        }
     }
 
     public ObservedMessage? SelectedObservedMessage
     {
         get => _selectedObservedMessage;
-        set => this.RaiseAndSetIfChanged(ref _selectedObservedMessage, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedObservedMessage, value);
+            this.RaisePropertyChanged(nameof(CanSettleSelectedObservedMessage));
+        }
     }
 
     public int PeekCount
@@ -195,6 +228,7 @@ public class QueueDetailViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> ExportObservedBodyCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> CompleteCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> AbandonCommand { get; }
+    public ReactiveCommand<ReceivedMessage, Unit> DeferCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> DeadLetterCommand { get; }
 
     public QueueDetailViewModel(
@@ -427,49 +461,65 @@ public class QueueDetailViewModel : ReactiveObject
         CopyObservedBodyCommand = ReactiveCommand.CreateFromTask(CopySelectedObservedBodyAsync);
         ExportObservedBodyCommand = ReactiveCommand.CreateFromTask(ExportSelectedObservedBodyAsync);
 
-        CompleteCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
-        {
-            if (_activeSession == null) return;
-            try
-            {
-                await _activeSession.CompleteAsync(msg);
-                _receivedSource.Remove(msg);
-            }
-            catch (Exception ex)
-            {
-                Error = ex.Message;
-            }
-        });
-
-        AbandonCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
-        {
-            if (_activeSession == null) return;
-            try
-            {
-                await _activeSession.AbandonAsync(msg);
-                _receivedSource.Remove(msg);
-            }
-            catch (Exception ex)
-            {
-                Error = ex.Message;
-            }
-        });
-
-        DeadLetterCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
-        {
-            if (_activeSession == null) return;
-            try
-            {
-                await _activeSession.DeadLetterAsync(msg);
-                _receivedSource.Remove(msg);
-            }
-            catch (Exception ex)
-            {
-                Error = ex.Message;
-            }
-        });
+        CompleteCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(msg =>
+            SettleReceivedAsync(msg, SettlementAction.Complete));
+        AbandonCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(msg =>
+            SettleReceivedAsync(msg, SettlementAction.Abandon));
+        DeferCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(msg =>
+            SettleReceivedAsync(msg, SettlementAction.Defer));
+        DeadLetterCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(msg =>
+            SettleReceivedAsync(msg, SettlementAction.DeadLetter));
 
         RefreshInfoCommand.Execute().Subscribe();
+    }
+
+    private async Task SettleReceivedAsync(ReceivedMessage msg, SettlementAction action)
+    {
+        if (_activeSession is null)
+        {
+            SettlementStatus = "No active peek-lock session.";
+            return;
+        }
+
+        if (SelectedObservedMessage is { } observed
+            && (observed.ReceiveKind == MessageReceiveKind.Peeked
+                || observed.SettlementState == SettlementState.Peeked)
+            && string.Equals(observed.MessageId, msg.MessageId, StringComparison.Ordinal))
+        {
+            var rejected = _receiveService.RejectPeekedSettlement(observed, action);
+            SettlementStatus = rejected.SafeMessage;
+            this.RaisePropertyChanged(nameof(CanSettleSelectedObservedMessage));
+            return;
+        }
+
+        try
+        {
+            var outcome = action switch
+            {
+                SettlementAction.Complete =>
+                    await _receiveService.CompleteAsync(_activeSession, msg),
+                SettlementAction.Abandon =>
+                    await _receiveService.AbandonAsync(_activeSession, msg),
+                SettlementAction.Defer =>
+                    await _receiveService.DeferAsync(_activeSession, msg),
+                SettlementAction.DeadLetter =>
+                    await _receiveService.DeadLetterAsync(_activeSession, msg),
+                _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
+            };
+
+            SettlementStatus = outcome.SafeMessage;
+            if (outcome.Result == SettlementResultKind.Succeeded)
+            {
+                _receivedSource.Remove(msg);
+            }
+
+            this.RaisePropertyChanged(nameof(CanSettleSelectedMessage));
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            SettlementStatus = ex.Message;
+        }
     }
 
     private async Task BrowseAsync(bool append)

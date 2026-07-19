@@ -109,6 +109,44 @@ public class PurgeConfirmationTests
             ConfirmedReceiveAndDeleteRequest request,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public SettlementItemOutcome RejectPeekedSettlement(
+            ObservedMessage message,
+            SettlementAction action) =>
+            SettlementTracker.RejectPeeked(message, action);
+
+        public Task<SettlementItemOutcome> CompleteAsync(
+            IReceiveSession session,
+            ReceivedMessage message,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<SettlementItemOutcome> AbandonAsync(
+            IReceiveSession session,
+            ReceivedMessage message,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<SettlementItemOutcome> DeferAsync(
+            IReceiveSession session,
+            ReceivedMessage message,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<SettlementItemOutcome> DeadLetterAsync(
+            IReceiveSession session,
+            ReceivedMessage message,
+            string? reason = null,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<SettlementBatchOutcome> SettleBatchAsync(
+            IReceiveSession session,
+            IReadOnlyList<ReceivedMessage> messages,
+            SettlementAction action,
+            string? deadLetterReason = null,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class RecordingConfirmationService(ConfirmationResult result)
