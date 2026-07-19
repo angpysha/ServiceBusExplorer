@@ -9,6 +9,7 @@ public class TopicDetailViewModel : ReactiveObject
     private readonly ITopicService _topicSvc;
     private readonly IMessageBrowseService _browseService;
     private readonly IMessageReceiveService _receiveService;
+    private readonly IPurgeService _purgeService;
     private readonly IConfirmationService _confirmationService;
     private readonly string _topicName;
     private readonly Subject<Unit> _navigateBack = new();
@@ -109,16 +110,17 @@ public class TopicDetailViewModel : ReactiveObject
     public TopicDetailViewModel(
         ITopicService topicSvc,
         ISubscriptionService subscriptionSvc,
-        IQueueService queueSvc,
         IMessageBrowseService browseService,
         IMessageSendService sendService,
         IMessageReceiveService receiveService,
+        IPurgeService purgeService,
         IConfirmationService confirmationService,
         string topicName)
     {
         _topicSvc = topicSvc;
         _browseService = browseService;
         _receiveService = receiveService;
+        _purgeService = purgeService;
         _confirmationService = confirmationService;
         _topicName = topicName;
         Subscriptions = new SubscriptionListViewModel(subscriptionSvc, topicName);
@@ -136,10 +138,10 @@ public class TopicDetailViewModel : ReactiveObject
                     ? null
                     : new SubscriptionDetailViewModel(
                         subscriptionSvc,
-                        queueSvc,
                         _browseService,
                         sendService,
                         _receiveService,
+                        _purgeService,
                         _confirmationService,
                         topicName,
                         sub.Name);

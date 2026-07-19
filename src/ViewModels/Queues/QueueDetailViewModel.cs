@@ -11,9 +11,11 @@ public class QueueDetailViewModel : ReactiveObject
     private readonly IQueueService _svc;
     private readonly IMessageBrowseService _browseService;
     private readonly IMessageReceiveService _receiveService;
+    private readonly IPurgeService _purgeService;
     private readonly IConfirmationService _confirmationService;
     private readonly Func<string, Task> _copyToClipboard;
     private readonly string _queueName;
+    private CancellationTokenSource? _purgeCts;
     private readonly Subject<Unit> _navigateBack = new();
     private readonly SourceList<ObservedMessage> _observedSource = new();
     private readonly SourceList<ReceivedMessage> _receivedSource = new();
@@ -44,6 +46,9 @@ public class QueueDetailViewModel : ReactiveObject
     private bool _isSaving;
     private string? _saveError;
     private string? _settlementStatus;
+    private string? _purgeStatus;
+    private bool _isPurging;
+    private OperationOutcomeKind? _purgeOutcomeKind;
 
     public QueueInfo? Queue
     {
@@ -75,6 +80,38 @@ public class QueueDetailViewModel : ReactiveObject
         get => _settlementStatus;
         private set => this.RaiseAndSetIfChanged(ref _settlementStatus, value);
     }
+
+    /// <summary>
+    /// Last purge operation presentation (loading, succeeded, cancelled, partial, or failure).
+    /// </summary>
+    public string? PurgeStatus
+    {
+        get => _purgeStatus;
+        private set => this.RaiseAndSetIfChanged(ref _purgeStatus, value);
+    }
+
+    /// <summary>
+    /// True while a confirmed purge is in progress.
+    /// </summary>
+    public bool IsPurging
+    {
+        get => _isPurging;
+        private set => this.RaiseAndSetIfChanged(ref _isPurging, value);
+    }
+
+    /// <summary>
+    /// Kind of the last purge <see cref="OperationOutcome"/>, when any.
+    /// </summary>
+    public OperationOutcomeKind? PurgeOutcomeKind
+    {
+        get => _purgeOutcomeKind;
+        private set => this.RaiseAndSetIfChanged(ref _purgeOutcomeKind, value);
+    }
+
+    public bool IsPurgeCancelled => PurgeOutcomeKind == OperationOutcomeKind.Cancelled;
+    public bool IsPurgePartial => PurgeOutcomeKind == OperationOutcomeKind.Partial;
+    public bool IsPurgeFailed => PurgeOutcomeKind == OperationOutcomeKind.Failed;
+    public bool IsPurgeSucceeded => PurgeOutcomeKind == OperationOutcomeKind.Succeeded;
 
     /// <summary>
     /// True when the selected peek-locked message is currently eligible to settle.
@@ -218,6 +255,7 @@ public class QueueDetailViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> PeekCommand { get; }
     public ReactiveCommand<Unit, Unit> LoadMoreObservedCommand { get; }
     public ReactiveCommand<Unit, Unit> PurgeCommand { get; }
+    public ReactiveCommand<Unit, Unit> CancelPurgeCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleSendPanelCommand { get; }
     public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
     public ReactiveCommand<Unit, Unit> StartReceiveCommand { get; }
@@ -236,6 +274,7 @@ public class QueueDetailViewModel : ReactiveObject
         IMessageBrowseService browseService,
         IMessageSendService sendService,
         IMessageReceiveService receiveService,
+        IPurgeService purgeService,
         IConfirmationService confirmationService,
         string queueName,
         Func<string, Task>? copyToClipboard = null)
@@ -243,6 +282,7 @@ public class QueueDetailViewModel : ReactiveObject
         _svc = svc;
         _browseService = browseService;
         _receiveService = receiveService;
+        _purgeService = purgeService;
         _confirmationService = confirmationService;
         _copyToClipboard = copyToClipboard ?? (_ => Task.CompletedTask);
         _queueName = queueName;
@@ -293,6 +333,9 @@ public class QueueDetailViewModel : ReactiveObject
             if (SelectedSource is not { } source)
             {
                 Error = "Select a message source before purging.";
+                PurgeStatus = Error;
+                PurgeOutcomeKind = OperationOutcomeKind.Failed;
+                RaisePurgeKindFlags();
                 return;
             }
 
@@ -303,27 +346,62 @@ public class QueueDetailViewModel : ReactiveObject
                     "All messages in this source will be permanently removed.",
                     ConfirmationRisk.Irreversible));
             if (confirmation != ConfirmationResult.Confirmed)
+            {
+                PurgeStatus = "Purge cancelled — no messages were removed.";
+                PurgeOutcomeKind = OperationOutcomeKind.Cancelled;
+                RaisePurgeKindFlags();
                 return;
+            }
 
+            _purgeCts?.Dispose();
+            _purgeCts = new CancellationTokenSource();
+            IsPurging = true;
             IsLoading = true;
             Error = null;
+            PurgeStatus = $"Purging {_queueName} ({source})…";
+            PurgeOutcomeKind = null;
+            this.RaisePropertyChanged(nameof(IsPurgeCancelled));
+            this.RaisePropertyChanged(nameof(IsPurgePartial));
+            this.RaisePropertyChanged(nameof(IsPurgeFailed));
+            this.RaisePropertyChanged(nameof(IsPurgeSucceeded));
+
             try
             {
-                await _svc.PurgeAsync(_queueName, source);
-                _observedSource.Clear();
-                _receivedSource.Clear();
-                _browseContinuation = null;
-                this.RaisePropertyChanged(nameof(HasMoreObservedMessages));
+                var outcome = await _purgeService.PurgeAsync(
+                    new EntityAddress(_queueName),
+                    source,
+                    _purgeCts.Token);
+
+                ApplyPurgeOutcome(outcome);
+                if (outcome.Kind is OperationOutcomeKind.Succeeded or OperationOutcomeKind.Partial)
+                {
+                    _observedSource.Clear();
+                    _receivedSource.Clear();
+                    _browseContinuation = null;
+                    this.RaisePropertyChanged(nameof(HasMoreObservedMessages));
+                }
             }
             catch (Exception ex)
             {
                 Error = ex.Message;
+                PurgeStatus = $"Purge failed: {ex.Message}";
+                PurgeOutcomeKind = OperationOutcomeKind.Failed;
+                RaisePurgeKindFlags();
             }
             finally
             {
+                IsPurging = false;
                 IsLoading = false;
             }
         });
+
+        CancelPurgeCommand = ReactiveCommand.Create(
+            () =>
+            {
+                _purgeCts?.Cancel();
+                PurgeStatus = "Cancelling purge…";
+            },
+            this.WhenAnyValue(x => x.IsPurging));
 
         UpdateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -520,6 +598,25 @@ public class QueueDetailViewModel : ReactiveObject
             Error = ex.Message;
             SettlementStatus = ex.Message;
         }
+    }
+
+    private void ApplyPurgeOutcome(OperationOutcome outcome)
+    {
+        PurgeOutcomeKind = outcome.Kind;
+        PurgeStatus = outcome.SafeMessage;
+        if (outcome.Kind is OperationOutcomeKind.Failed or OperationOutcomeKind.Partial)
+            Error = outcome.SafeMessage;
+        else
+            Error = null;
+        RaisePurgeKindFlags();
+    }
+
+    private void RaisePurgeKindFlags()
+    {
+        this.RaisePropertyChanged(nameof(IsPurgeCancelled));
+        this.RaisePropertyChanged(nameof(IsPurgePartial));
+        this.RaisePropertyChanged(nameof(IsPurgeFailed));
+        this.RaisePropertyChanged(nameof(IsPurgeSucceeded));
     }
 
     private async Task BrowseAsync(bool append)

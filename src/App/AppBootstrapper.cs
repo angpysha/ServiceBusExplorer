@@ -91,6 +91,7 @@ public class AppBootstrapper : IDisposable
         sc.AddSingleton<IMessageBrowseService, MessageBrowseService>();
         sc.AddSingleton<IMessageSendService, MessageSendService>();
         sc.AddSingleton<IMessageReceiveService, MessageReceiveService>();
+        sc.AddSingleton<IPurgeService, PurgeService>();
         sc.AddSingleton<ITopicService, TopicService>();
         sc.AddSingleton<ISubscriptionService, SubscriptionService>();
         sc.AddSingleton<IRelayService, RelayService>();

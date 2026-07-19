@@ -9,44 +9,68 @@ public class PurgeConfirmationTests
     [Fact]
     public async Task Purge_WithNoSelectedSource_DoesNotCallService()
     {
-        var queue = new RecordingQueueService();
+        var purge = new RecordingPurgeService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
-        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), new StubMessageReceiveService(), confirmation, "orders");
+        var viewModel = new QueueDetailViewModel(
+            new StubQueueService(),
+            browse,
+            new StubMessageSendService(),
+            new StubMessageReceiveService(),
+            purge,
+            confirmation,
+            "orders");
 
         await viewModel.PurgeCommand.Execute().ToTask();
 
-        Assert.Empty(queue.PurgeCalls);
+        Assert.Empty(purge.Calls);
         Assert.Empty(confirmation.Requests);
+        Assert.True(viewModel.IsPurgeFailed);
     }
 
     [Fact]
     public async Task Purge_WhenCancelled_DoesNotCallService()
     {
-        var queue = new RecordingQueueService();
+        var purge = new RecordingPurgeService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Cancelled);
-        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), new StubMessageReceiveService(), confirmation, "orders")
+        var viewModel = new QueueDetailViewModel(
+            new StubQueueService(),
+            browse,
+            new StubMessageSendService(),
+            new StubMessageReceiveService(),
+            purge,
+            confirmation,
+            "orders")
         {
             SelectedSource = MessageSource.DeadLetter
         };
 
         await viewModel.PurgeCommand.Execute().ToTask();
 
-        Assert.Empty(queue.PurgeCalls);
+        Assert.Empty(purge.Calls);
         var request = Assert.Single(confirmation.Requests);
         Assert.Equal("orders", request.Target);
         Assert.Equal(MessageSource.DeadLetter, request.Source);
         Assert.Equal(ConfirmationRisk.Irreversible, request.Risk);
+        Assert.True(viewModel.IsPurgeCancelled);
+        Assert.Contains("cancelled", viewModel.PurgeStatus, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task Purge_WhenConfirmed_UsesExactSelectedSource()
     {
-        var queue = new RecordingQueueService();
+        var purge = new RecordingPurgeService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
-        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), new StubMessageReceiveService(), confirmation, "orders")
+        var viewModel = new QueueDetailViewModel(
+            new StubQueueService(),
+            browse,
+            new StubMessageSendService(),
+            new StubMessageReceiveService(),
+            purge,
+            confirmation,
+            "orders")
         {
             SelectedSource = MessageSource.TransferDeadLetter
         };
@@ -55,21 +79,22 @@ public class PurgeConfirmationTests
 
         Assert.Equal(
             new[] { ("orders", MessageSource.TransferDeadLetter) },
-            queue.PurgeCalls);
+            purge.Calls);
+        Assert.True(viewModel.IsPurgeSucceeded);
     }
 
     [Fact]
     public async Task SubscriptionPurge_WhenConfirmed_UsesSubscriptionPathAndExactSource()
     {
-        var queue = new RecordingQueueService();
+        var purge = new RecordingPurgeService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
         var viewModel = new SubscriptionDetailViewModel(
             new StubSubscriptionService(),
-            queue,
             browse,
             new StubMessageSendService(),
             new StubMessageReceiveService(),
+            purge,
             confirmation,
             "sales",
             "regional")
@@ -81,9 +106,10 @@ public class PurgeConfirmationTests
 
         Assert.Equal(
             new[] { ("sales/Subscriptions/regional", MessageSource.DeadLetter) },
-            queue.PurgeCalls);
+            purge.Calls);
         var request = Assert.Single(confirmation.Requests);
         Assert.Equal("sales/Subscriptions/regional", request.Target);
+        Assert.True(viewModel.IsPurgeSucceeded);
     }
 
     private sealed class StubMessageSendService : IMessageSendService
@@ -163,10 +189,27 @@ public class PurgeConfirmationTests
         }
     }
 
-    private sealed class RecordingQueueService : IQueueService
+    private sealed class RecordingPurgeService : IPurgeService
     {
-        public List<(string Name, MessageSource Source)> PurgeCalls { get; } = [];
+        public List<(string Path, MessageSource Source)> Calls { get; } = [];
 
+        public Task<OperationOutcome> PurgeAsync(
+            EntityAddress target,
+            MessageSource source,
+            CancellationToken cancellationToken = default)
+        {
+            Calls.Add((target.Path, source));
+            return Task.FromResult(OperationOutcome.Succeeded(
+                "Purge",
+                target.Path,
+                source,
+                confirmedCount: 0,
+                safeMessage: $"Purged 0 message(s) from {target.Path} ({source})."));
+        }
+    }
+
+    private sealed class StubQueueService : IQueueService
+    {
         public Task<IReadOnlyList<QueueInfo>> ListAsync(CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<QueueInfo>>([]);
 
@@ -198,11 +241,8 @@ public class PurgeConfirmationTests
         public Task PurgeAsync(
             string name,
             MessageSource source,
-            CancellationToken ct = default)
-        {
-            PurgeCalls.Add((name, source));
-            return Task.CompletedTask;
-        }
+            CancellationToken ct = default) =>
+            Task.CompletedTask;
 
         public Task<IReceiveSession> OpenReceiveSessionAsync(
             string name,

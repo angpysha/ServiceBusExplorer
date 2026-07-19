@@ -196,6 +196,7 @@ public class MessageBrowseTests
             browse,
             new StubMessageSendService(),
             new StubMessageReceiveService(),
+            new NoOpPurgeService(),
             new NoOpConfirmationService(),
             "orders");
 
@@ -219,6 +220,7 @@ public class MessageBrowseTests
             browse,
             new StubMessageSendService(),
             new StubMessageReceiveService(),
+            new NoOpPurgeService(),
             new NoOpConfirmationService(),
             "orders")
         {
@@ -294,6 +296,7 @@ public class MessageBrowseTests
             browse,
             new StubMessageSendService(),
             new StubMessageReceiveService(),
+            new NoOpPurgeService(),
             confirmation,
             "orders",
             text => { onCopy(text); return Task.CompletedTask; })
@@ -395,6 +398,20 @@ public class MessageBrowseTests
             Requests.Add(request);
             return Task.FromResult(result);
         }
+    }
+
+    private sealed class NoOpPurgeService : IPurgeService
+    {
+        public Task<OperationOutcome> PurgeAsync(
+            EntityAddress target,
+            MessageSource source,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(OperationOutcome.Succeeded(
+                "Purge",
+                target.Path,
+                source,
+                0,
+                "No-op purge."));
     }
 
     private sealed class NoOpConfirmationService(ConfirmationResult result = ConfirmationResult.Cancelled)

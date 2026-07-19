@@ -12,6 +12,7 @@ public class QueueListViewModel : ReactiveObject
     private readonly IMessageBrowseService _browseService;
     private readonly IMessageSendService _sendService;
     private readonly IMessageReceiveService _receiveService;
+    private readonly IPurgeService _purgeService;
     private readonly IConfirmationService _confirmationService;
     private readonly SourceList<QueueInfo> _source = new();
     private ConnectionScope _scope = ConnectionScope.Namespace;
@@ -76,6 +77,7 @@ public class QueueListViewModel : ReactiveObject
         IMessageBrowseService browseService,
         IMessageSendService sendService,
         IMessageReceiveService receiveService,
+        IPurgeService purgeService,
         IConfirmationService confirmationService,
         LiveConnectionContext? liveContext = null)
     {
@@ -84,6 +86,7 @@ public class QueueListViewModel : ReactiveObject
         _browseService = browseService;
         _sendService = sendService;
         _receiveService = receiveService;
+        _purgeService = purgeService;
         _confirmationService = confirmationService;
 
         if (liveContext is not null)
@@ -102,7 +105,7 @@ public class QueueListViewModel : ReactiveObject
             {
                 var detail = q == null
                     ? null
-                    : new QueueDetailViewModel(_svc, _browseService, _sendService, _receiveService, _confirmationService, q.Name);
+                    : new QueueDetailViewModel(_svc, _browseService, _sendService, _receiveService, _purgeService, _confirmationService, q.Name);
                 if (detail != null)
                     detail.NavigateBackRequested.Subscribe(_ => SelectedQueue = null);
                 SelectedDetail = detail;

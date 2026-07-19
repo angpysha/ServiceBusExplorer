@@ -16,12 +16,46 @@
                  VerticalAlignment="Center" />
     </StackPanel>
 
-    <!-- Error -->
-    <TextBlock Grid.Row="1" Margin="16,0,16,4"
-               Text="{Binding Error}"
-               IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
-               TextWrapping="Wrap" />
+    <!-- Error + purge operation state -->
+    <StackPanel Grid.Row="1" Margin="16,0,16,4" Spacing="4">
+      <TextBlock Text="{Binding Error}"
+                 IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                 Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                 TextWrapping="Wrap" />
+      <StackPanel Spacing="4"
+                  IsVisible="{Binding PurgeStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Text="{Binding PurgeStatus}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   AutomationProperties.Name="Purge status"
+                   AutomationProperties.LiveSetting="Polite" />
+        <TextBlock Text="Purge cancelled"
+                   IsVisible="{Binding IsPurgeCancelled}"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   FontSize="11"
+                   AutomationProperties.Name="Purge cancelled" />
+        <TextBlock Text="Partial purge — confirmed removals only; remainder uncertain"
+                   IsVisible="{Binding IsPurgePartial}"
+                   Foreground="#C19C00"
+                   FontSize="11"
+                   AutomationProperties.Name="Partial purge" />
+        <TextBlock Text="Purge failed"
+                   IsVisible="{Binding IsPurgeFailed}"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   FontSize="11"
+                   AutomationProperties.Name="Purge failed" />
+        <TextBlock Text="Purge completed"
+                   IsVisible="{Binding IsPurgeSucceeded}"
+                   Foreground="#107C10"
+                   FontSize="11"
+                   AutomationProperties.Name="Purge completed" />
+        <Button Content="Cancel purge"
+                Command="{Binding CancelPurgeCommand}"
+                IsVisible="{Binding IsPurging}"
+                HorizontalAlignment="Left"
+                AutomationProperties.Name="Cancel purge" />
+      </StackPanel>
+    </StackPanel>
 
     <!-- Tabs -->
     <TabControl Grid.Row="2" Margin="4,0,4,4">

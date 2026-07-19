@@ -181,15 +181,22 @@ public sealed class ScopedNavigationTests
 
         var eventHubSvc = new StubEventHubService();
         var eventHubDetail = new EventHubDetailViewModel(eventHubSvc);
-        var queues = new QueueListViewModel(namespaceSvc, queueSvc, browse, new StubMessageSendService(), new StubMessageReceiveService(), confirmation);
-        var topics = new TopicListViewModel(
+        var queues = new QueueListViewModel(
             namespaceSvc,
-            topicSvc,
-            new StubSubscriptionService(),
             queueSvc,
             browse,
             new StubMessageSendService(),
             new StubMessageReceiveService(),
+            new NoOpPurgeService(),
+            confirmation);
+        var topics = new TopicListViewModel(
+            namespaceSvc,
+            topicSvc,
+            new StubSubscriptionService(),
+            browse,
+            new StubMessageSendService(),
+            new StubMessageReceiveService(),
+            new NoOpPurgeService(),
             confirmation);
 
         var context = LiveConnectionContext.Create(
@@ -300,6 +307,20 @@ public sealed class ScopedNavigationTests
 
         public Task DeleteAsync(string name, CancellationToken ct = default) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class NoOpPurgeService : IPurgeService
+    {
+        public Task<OperationOutcome> PurgeAsync(
+            EntityAddress target,
+            MessageSource source,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(OperationOutcome.Succeeded(
+                "Purge",
+                target.Path,
+                source,
+                0,
+                "No-op purge."));
     }
 
     private sealed class NoOpConfirmationService : IConfirmationService
