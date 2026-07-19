@@ -10,8 +10,9 @@ public class PurgeConfirmationTests
     public async Task Purge_WithNoSelectedSource_DoesNotCallService()
     {
         var queue = new RecordingQueueService();
+        var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
-        var viewModel = new QueueDetailViewModel(queue, confirmation, "orders");
+        var viewModel = new QueueDetailViewModel(queue, browse, confirmation, "orders");
 
         await viewModel.PurgeCommand.Execute().ToTask();
 
@@ -23,8 +24,9 @@ public class PurgeConfirmationTests
     public async Task Purge_WhenCancelled_DoesNotCallService()
     {
         var queue = new RecordingQueueService();
+        var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Cancelled);
-        var viewModel = new QueueDetailViewModel(queue, confirmation, "orders")
+        var viewModel = new QueueDetailViewModel(queue, browse, confirmation, "orders")
         {
             SelectedSource = MessageSource.DeadLetter
         };
@@ -42,8 +44,9 @@ public class PurgeConfirmationTests
     public async Task Purge_WhenConfirmed_UsesExactSelectedSource()
     {
         var queue = new RecordingQueueService();
+        var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
-        var viewModel = new QueueDetailViewModel(queue, confirmation, "orders")
+        var viewModel = new QueueDetailViewModel(queue, browse, confirmation, "orders")
         {
             SelectedSource = MessageSource.TransferDeadLetter
         };
@@ -59,10 +62,12 @@ public class PurgeConfirmationTests
     public async Task SubscriptionPurge_WhenConfirmed_UsesSubscriptionPathAndExactSource()
     {
         var queue = new RecordingQueueService();
+        var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
         var viewModel = new SubscriptionDetailViewModel(
             new StubSubscriptionService(),
             queue,
+            browse,
             confirmation,
             "sales",
             "regional")
@@ -190,5 +195,15 @@ public class PurgeConfirmationTests
             string ruleName,
             CancellationToken ct = default) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class NoOpBrowseService : IMessageBrowseService
+    {
+        public Task<MessageBrowseResult> PeekAsync(
+            EntityAddress address,
+            MessageSource source,
+            PageRequest page,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new MessageBrowseResult([], null, SourceAvailability.Empty));
     }
 }

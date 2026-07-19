@@ -11,6 +11,7 @@ public class TopicListViewModel : ReactiveObject
     private readonly ITopicService _svc;
     private readonly ISubscriptionService _subSvc;
     private readonly IQueueService _queueSvc;
+    private readonly IMessageBrowseService _browseService;
     private readonly IConfirmationService _confirmationService;
     private readonly SourceList<TopicInfo> _source = new();
     private ConnectionScope _scope = ConnectionScope.Namespace;
@@ -74,6 +75,7 @@ public class TopicListViewModel : ReactiveObject
         ITopicService svc,
         ISubscriptionService subSvc,
         IQueueService queueSvc,
+        IMessageBrowseService browseService,
         IConfirmationService confirmationService,
         LiveConnectionContext? liveContext = null)
     {
@@ -81,6 +83,7 @@ public class TopicListViewModel : ReactiveObject
         _svc = svc;
         _subSvc = subSvc;
         _queueSvc = queueSvc;
+        _browseService = browseService;
         _confirmationService = confirmationService;
 
         if (liveContext is not null)
@@ -103,6 +106,7 @@ public class TopicListViewModel : ReactiveObject
                         _svc,
                         _subSvc,
                         _queueSvc,
+                        _browseService,
                         _confirmationService,
                         t.Name);
                 if (detail != null)

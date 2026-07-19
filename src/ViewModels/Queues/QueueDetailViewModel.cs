@@ -9,19 +9,26 @@ namespace ServiceBusExplorer.ViewModels;
 public class QueueDetailViewModel : ReactiveObject
 {
     private readonly IQueueService _svc;
+    private readonly IMessageBrowseService _browseService;
     private readonly IConfirmationService _confirmationService;
+    private readonly Func<string, Task> _copyToClipboard;
     private readonly string _queueName;
     private readonly Subject<Unit> _navigateBack = new();
-    private readonly SourceList<ReceivedMessage> _messageSource = new();
+    private readonly SourceList<ObservedMessage> _observedSource = new();
+    private readonly SourceList<ReceivedMessage> _receivedSource = new();
     private QueueInfo? _queue;
     private bool _isLoading;
     private string? _error;
     private ReceivedMessage? _selectedMessage;
+    private ObservedMessage? _selectedObservedMessage;
     private int _peekCount = 20;
     private MessageSource? _selectedSource;
     private bool _showSendPanel;
     private bool _isReceiveMode;
     private IReceiveSession? _activeSession;
+    private SourceAvailability _browseAvailability = SourceAvailability.Empty;
+    private BrowseContinuation? _browseContinuation;
+    private bool _userAcceptedSensitiveCopy;
 
     // Editable fields
     private int _maxDeliveryCount;
@@ -64,6 +71,12 @@ public class QueueDetailViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _selectedMessage, value);
     }
 
+    public ObservedMessage? SelectedObservedMessage
+    {
+        get => _selectedObservedMessage;
+        set => this.RaiseAndSetIfChanged(ref _selectedObservedMessage, value);
+    }
+
     public int PeekCount
     {
         get => _peekCount;
@@ -74,6 +87,20 @@ public class QueueDetailViewModel : ReactiveObject
     {
         get => _selectedSource;
         set => this.RaiseAndSetIfChanged(ref _selectedSource, value);
+    }
+
+    public SourceAvailability BrowseAvailability
+    {
+        get => _browseAvailability;
+        private set => this.RaiseAndSetIfChanged(ref _browseAvailability, value);
+    }
+
+    public bool HasMoreObservedMessages => _browseContinuation is not null;
+
+    public bool UserAcceptedSensitiveCopy
+    {
+        get => _userAcceptedSensitiveCopy;
+        private set => this.RaiseAndSetIfChanged(ref _userAcceptedSensitiveCopy, value);
     }
 
     public bool ShowSendPanel
@@ -147,6 +174,7 @@ public class QueueDetailViewModel : ReactiveObject
     public static IReadOnlyList<MessageSource> SourceOptions { get; } =
         Enum.GetValues<MessageSource>();
 
+    public ReadOnlyObservableCollection<ObservedMessage> ObservedMessages { get; }
     public ReadOnlyObservableCollection<ReceivedMessage> Messages { get; }
     public SendMessageViewModel Send { get; }
 
@@ -154,27 +182,37 @@ public class QueueDetailViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> NavigateBackCommand { get; }
     public ReactiveCommand<Unit, Unit> RefreshInfoCommand { get; }
     public ReactiveCommand<Unit, Unit> PeekCommand { get; }
+    public ReactiveCommand<Unit, Unit> LoadMoreObservedCommand { get; }
     public ReactiveCommand<Unit, Unit> PurgeCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleSendPanelCommand { get; }
     public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
     public ReactiveCommand<Unit, Unit> StartReceiveCommand { get; }
     public ReactiveCommand<Unit, Unit> StopReceiveCommand { get; }
     public ReactiveCommand<Unit, Unit> ReceiveBatchCommand { get; }
+    public ReactiveCommand<Unit, Unit> CopyObservedBodyCommand { get; }
+    public ReactiveCommand<Unit, Unit> ExportObservedBodyCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> CompleteCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> AbandonCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> DeadLetterCommand { get; }
 
     public QueueDetailViewModel(
         IQueueService svc,
+        IMessageBrowseService browseService,
         IConfirmationService confirmationService,
-        string queueName)
+        string queueName,
+        Func<string, Task>? copyToClipboard = null)
     {
         _svc = svc;
+        _browseService = browseService;
         _confirmationService = confirmationService;
+        _copyToClipboard = copyToClipboard ?? (_ => Task.CompletedTask);
         _queueName = queueName;
 
-        _messageSource.Connect().Bind(out var bound).Subscribe();
-        Messages = bound;
+        _observedSource.Connect().Bind(out var observedBound).Subscribe();
+        ObservedMessages = observedBound;
+
+        _receivedSource.Connect().Bind(out var receivedBound).Subscribe();
+        Messages = receivedBound;
 
         Send = new SendMessageViewModel(
             svc,
@@ -203,28 +241,13 @@ public class QueueDetailViewModel : ReactiveObject
 
         PeekCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            IsLoading = true;
-            Error = null;
-            try
-            {
-                if (SelectedSource is not { } source)
-                {
-                    Error = "Select a message source before peeking.";
-                    return;
-                }
-
-                var msgs = await _svc.PeekAsync(_queueName, PeekCount, source);
-                _messageSource.Edit(list => { list.Clear(); list.AddRange(msgs); });
-            }
-            catch (Exception ex)
-            {
-                Error = ex.Message;
-            }
-            finally
-            {
-                IsLoading = false;
-            }
+            await BrowseAsync(append: false);
         });
+
+        LoadMoreObservedCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await BrowseAsync(append: true);
+        }, this.WhenAnyValue(x => x.HasMoreObservedMessages));
 
         PurgeCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -248,7 +271,10 @@ public class QueueDetailViewModel : ReactiveObject
             try
             {
                 await _svc.PurgeAsync(_queueName, source);
-                _messageSource.Clear();
+                _observedSource.Clear();
+                _receivedSource.Clear();
+                _browseContinuation = null;
+                this.RaisePropertyChanged(nameof(HasMoreObservedMessages));
             }
             catch (Exception ex)
             {
@@ -307,7 +333,7 @@ public class QueueDetailViewModel : ReactiveObject
                 }
 
                 _activeSession = await _svc.OpenReceiveSessionAsync(_queueName, source);
-                _messageSource.Clear();
+                _receivedSource.Clear();
                 IsReceiveMode = true;
             }
             catch (Exception ex)
@@ -338,7 +364,7 @@ public class QueueDetailViewModel : ReactiveObject
             try
             {
                 var msgs = await _activeSession.ReceiveBatchAsync(PeekCount);
-                _messageSource.AddRange(msgs);
+                _receivedSource.AddRange(msgs);
             }
             catch (Exception ex)
             {
@@ -350,13 +376,16 @@ public class QueueDetailViewModel : ReactiveObject
             }
         }, hasSession);
 
+        CopyObservedBodyCommand = ReactiveCommand.CreateFromTask(CopySelectedObservedBodyAsync);
+        ExportObservedBodyCommand = ReactiveCommand.CreateFromTask(ExportSelectedObservedBodyAsync);
+
         CompleteCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
         {
             if (_activeSession == null) return;
             try
             {
                 await _activeSession.CompleteAsync(msg);
-                _messageSource.Remove(msg);
+                _receivedSource.Remove(msg);
             }
             catch (Exception ex)
             {
@@ -370,7 +399,7 @@ public class QueueDetailViewModel : ReactiveObject
             try
             {
                 await _activeSession.AbandonAsync(msg);
-                _messageSource.Remove(msg);
+                _receivedSource.Remove(msg);
             }
             catch (Exception ex)
             {
@@ -384,7 +413,7 @@ public class QueueDetailViewModel : ReactiveObject
             try
             {
                 await _activeSession.DeadLetterAsync(msg);
-                _messageSource.Remove(msg);
+                _receivedSource.Remove(msg);
             }
             catch (Exception ex)
             {
@@ -394,6 +423,105 @@ public class QueueDetailViewModel : ReactiveObject
 
         RefreshInfoCommand.Execute().Subscribe();
     }
+
+    private async Task BrowseAsync(bool append)
+    {
+        IsLoading = true;
+        Error = null;
+        try
+        {
+            if (SelectedSource is not { } source)
+            {
+                Error = "Select a message source before peeking.";
+                return;
+            }
+
+            var fromSequence = append ? _browseContinuation?.FromSequenceNumber : null;
+            var result = await _browseService.PeekAsync(
+                new EntityAddress(_queueName),
+                source,
+                new PageRequest(PeekCount, fromSequence));
+
+            BrowseAvailability = result.Availability;
+            _browseContinuation = result.Continuation;
+            this.RaisePropertyChanged(nameof(HasMoreObservedMessages));
+
+            if (!append)
+            {
+                _observedSource.Edit(list =>
+                {
+                    list.Clear();
+                    list.AddRange(result.Messages);
+                });
+                UserAcceptedSensitiveCopy = false;
+            }
+            else
+            {
+                _observedSource.AddRange(result.Messages);
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task CopySelectedObservedBodyAsync()
+    {
+        if (SelectedObservedMessage is not { } message)
+            return;
+
+        if (!await ConfirmSensitiveCopyAsync())
+            return;
+
+        var text = GetCopyableBodyText(message);
+        if (text is null)
+            return;
+
+        await _copyToClipboard(text);
+        UserAcceptedSensitiveCopy = true;
+    }
+
+    private async Task ExportSelectedObservedBodyAsync()
+    {
+        if (SelectedObservedMessage is not { } message)
+            return;
+
+        if (!await ConfirmSensitiveCopyAsync())
+            return;
+
+        var text = GetCopyableBodyText(message);
+        if (text is null)
+            return;
+
+        await _copyToClipboard(text);
+        UserAcceptedSensitiveCopy = true;
+    }
+
+    private async Task<bool> ConfirmSensitiveCopyAsync()
+    {
+        if (SelectedSource is not { } source)
+            return false;
+
+        return await SensitiveContentCopy.ConfirmAsync(
+            _confirmationService,
+            _queueName,
+            source);
+    }
+
+    private static string? GetCopyableBodyText(ObservedMessage message) =>
+        message.Body.Kind switch
+        {
+            MessageBodyKind.Empty => message.Body.DisplayText,
+            MessageBodyKind.Unavailable => null,
+            MessageBodyKind.Binary => message.Body.DisplayText,
+            MessageBodyKind.Truncated => message.Body.DisplayText,
+            _ => message.Body.DisplayText
+        };
 
     private void PopulateEditableFields(QueueInfo q)
     {

@@ -86,6 +86,8 @@ public class AppBootstrapper : IDisposable
         sc.AddSingleton(_liveContext);
         sc.AddSingleton<INamespaceService, NamespaceService>();
         sc.AddSingleton<IQueueService, QueueService>();
+        sc.AddSingleton<IServiceBusPeekAdapter, ServiceBusPeekAdapter>();
+        sc.AddSingleton<IMessageBrowseService, MessageBrowseService>();
         sc.AddSingleton<ITopicService, TopicService>();
         sc.AddSingleton<ISubscriptionService, SubscriptionService>();
         sc.AddSingleton<IRelayService, RelayService>();

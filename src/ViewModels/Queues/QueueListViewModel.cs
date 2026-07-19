@@ -9,6 +9,7 @@ public class QueueListViewModel : ReactiveObject
 {
     private readonly INamespaceService _namespaceService;
     private readonly IQueueService _svc;
+    private readonly IMessageBrowseService _browseService;
     private readonly IConfirmationService _confirmationService;
     private readonly SourceList<QueueInfo> _source = new();
     private ConnectionScope _scope = ConnectionScope.Namespace;
@@ -70,11 +71,13 @@ public class QueueListViewModel : ReactiveObject
     public QueueListViewModel(
         INamespaceService namespaceService,
         IQueueService svc,
+        IMessageBrowseService browseService,
         IConfirmationService confirmationService,
         LiveConnectionContext? liveContext = null)
     {
         _namespaceService = namespaceService;
         _svc = svc;
+        _browseService = browseService;
         _confirmationService = confirmationService;
 
         if (liveContext is not null)
@@ -93,7 +96,7 @@ public class QueueListViewModel : ReactiveObject
             {
                 var detail = q == null
                     ? null
-                    : new QueueDetailViewModel(_svc, _confirmationService, q.Name);
+                    : new QueueDetailViewModel(_svc, _browseService, _confirmationService, q.Name);
                 if (detail != null)
                     detail.NavigateBackRequested.Subscribe(_ => SelectedQueue = null);
                 SelectedDetail = detail;

@@ -7,6 +7,7 @@ namespace ServiceBusExplorer.ViewModels;
 public class TopicDetailViewModel : ReactiveObject
 {
     private readonly ITopicService _topicSvc;
+    private readonly IMessageBrowseService _browseService;
     private readonly IConfirmationService _confirmationService;
     private readonly string _topicName;
     private readonly Subject<Unit> _navigateBack = new();
@@ -108,10 +109,12 @@ public class TopicDetailViewModel : ReactiveObject
         ITopicService topicSvc,
         ISubscriptionService subscriptionSvc,
         IQueueService queueSvc,
+        IMessageBrowseService browseService,
         IConfirmationService confirmationService,
         string topicName)
     {
         _topicSvc = topicSvc;
+        _browseService = browseService;
         _confirmationService = confirmationService;
         _topicName = topicName;
         Subscriptions = new SubscriptionListViewModel(subscriptionSvc, topicName);
@@ -130,6 +133,7 @@ public class TopicDetailViewModel : ReactiveObject
                     : new SubscriptionDetailViewModel(
                         subscriptionSvc,
                         queueSvc,
+                        _browseService,
                         _confirmationService,
                         topicName,
                         sub.Name);

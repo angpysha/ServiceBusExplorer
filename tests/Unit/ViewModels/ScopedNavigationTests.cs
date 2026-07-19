@@ -173,6 +173,7 @@ public sealed class ScopedNavigationTests
         ScopedEntityKind entityKind = ScopedEntityKind.None)
     {
         var confirmation = new NoOpConfirmationService();
+        var browse = new NoOpBrowseService();
         var namespaceSvc = new NamespaceService(
             NullLogger<NamespaceService>.Instance,
             queueService: queueSvc,
@@ -180,12 +181,13 @@ public sealed class ScopedNavigationTests
 
         var eventHubSvc = new StubEventHubService();
         var eventHubDetail = new EventHubDetailViewModel(eventHubSvc);
-        var queues = new QueueListViewModel(namespaceSvc, queueSvc, confirmation);
+        var queues = new QueueListViewModel(namespaceSvc, queueSvc, browse, confirmation);
         var topics = new TopicListViewModel(
             namespaceSvc,
             topicSvc,
             new StubSubscriptionService(),
             queueSvc,
+            browse,
             confirmation);
 
         var context = LiveConnectionContext.Create(
@@ -381,5 +383,15 @@ public sealed class ScopedNavigationTests
 
         public Task DeleteAsync(string name, CancellationToken ct = default) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class NoOpBrowseService : IMessageBrowseService
+    {
+        public Task<MessageBrowseResult> PeekAsync(
+            EntityAddress address,
+            MessageSource source,
+            PageRequest page,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new MessageBrowseResult([], null, SourceAvailability.Empty));
     }
 }
