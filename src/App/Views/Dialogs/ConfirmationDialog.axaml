@@ -26,10 +26,11 @@
               IsDefault="True"
               IsCancel="True"
               Click="OnCancel"
-              AutomationProperties.Name="Cancel purge" />
-      <Button Content="Purge"
+              AutomationProperties.Name="Cancel destructive operation" />
+      <Button x:Name="ConfirmButton"
+              Content="Confirm"
               Click="OnConfirm"
-              AutomationProperties.Name="Confirm irreversible purge" />
+              AutomationProperties.Name="Confirm irreversible operation" />
     </StackPanel>
   </StackPanel>
 </Window>

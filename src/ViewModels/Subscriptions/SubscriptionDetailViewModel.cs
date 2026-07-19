@@ -51,6 +51,9 @@ public class SubscriptionDetailViewModel : ReactiveObject
     private string? _purgeStatus;
     private bool _isPurging;
     private OperationOutcomeKind? _purgeOutcomeKind;
+    private string? _adminStatus;
+    private EntityLifecycleKind? _adminOutcomeKind;
+    private bool _isAdminCancelled;
 
     public SubscriptionInfo? Info
     {
@@ -114,6 +117,31 @@ public class SubscriptionDetailViewModel : ReactiveObject
     public bool IsPurgePartial => PurgeOutcomeKind == OperationOutcomeKind.Partial;
     public bool IsPurgeFailed => PurgeOutcomeKind == OperationOutcomeKind.Failed;
     public bool IsPurgeSucceeded => PurgeOutcomeKind == OperationOutcomeKind.Succeeded;
+
+    /// <summary>Last administration outcome (update/delete validation, auth, conflict, success).</summary>
+    public string? AdminStatus
+    {
+        get => _adminStatus;
+        private set => this.RaiseAndSetIfChanged(ref _adminStatus, value);
+    }
+
+    public EntityLifecycleKind? AdminOutcomeKind
+    {
+        get => _adminOutcomeKind;
+        private set => this.RaiseAndSetIfChanged(ref _adminOutcomeKind, value);
+    }
+
+    public bool IsAdminCancelled
+    {
+        get => _isAdminCancelled;
+        private set => this.RaiseAndSetIfChanged(ref _isAdminCancelled, value);
+    }
+
+    public bool IsAdminConflict => AdminOutcomeKind == EntityLifecycleKind.Conflict;
+    public bool IsAdminStale => IsAdminConflict;
+    public bool IsAdminValidationFailed => AdminOutcomeKind == EntityLifecycleKind.ValidationFailed;
+    public bool IsAdminFailed => AdminOutcomeKind == EntityLifecycleKind.Failed;
+    public bool IsAdminSucceeded => AdminOutcomeKind == EntityLifecycleKind.Succeeded;
 
     /// <summary>
     /// True when the selected peek-locked message is currently eligible to settle.
@@ -261,6 +289,7 @@ public class SubscriptionDetailViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> CancelPurgeCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleSendPanelCommand { get; }
     public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
+    public ReactiveCommand<Unit, Unit> DeleteCommand { get; }
     public ReactiveCommand<Unit, Unit> StartReceiveCommand { get; }
     public ReactiveCommand<Unit, Unit> StopReceiveCommand { get; }
     public ReactiveCommand<Unit, Unit> ReceiveBatchCommand { get; }
@@ -299,7 +328,7 @@ public class SubscriptionDetailViewModel : ReactiveObject
         _receivedSource.Connect().Bind(out var receivedBound).Subscribe();
         Messages = receivedBound;
 
-        Rules = new RuleListViewModel(subSvc, topicName, subscriptionName);
+        Rules = new RuleListViewModel(subSvc, confirmationService, topicName, subscriptionName);
         Send = new SendMessageViewModel(
             sendService,
             new SendTargetContext(
@@ -314,6 +343,7 @@ public class SubscriptionDetailViewModel : ReactiveObject
         {
             IsLoading = true;
             Error = null;
+            ClearAdminPresentation();
             try
             {
                 Info = await subSvc.GetAsync(topicName, subscriptionName);
@@ -354,7 +384,8 @@ public class SubscriptionDetailViewModel : ReactiveObject
                     _entityPath,
                     source,
                     "All messages in this source will be permanently removed.",
-                    ConfirmationRisk.Irreversible));
+                    ConfirmationRisk.Irreversible,
+                    ConfirmActionLabel: "Purge"));
             if (confirmation != ConfirmationResult.Confirmed)
             {
                 PurgeStatus = "Purge cancelled — no messages were removed.";
@@ -433,9 +464,11 @@ public class SubscriptionDetailViewModel : ReactiveObject
                     UserMetadata = UserMetadata,
                 };
                 var result = await _subSvc.UpdateAsync(updated);
+                PresentAdminResult(result);
                 if (result.IsSuccess && result.Entity is not null)
                 {
                     Info = result.Entity;
+                    SaveError = null;
                 }
                 else
                 {
@@ -447,11 +480,42 @@ public class SubscriptionDetailViewModel : ReactiveObject
             catch (Exception ex)
             {
                 SaveError = ex.Message;
+                PresentAdminFailed(ex.Message);
             }
             finally
             {
                 IsSaving = false;
             }
+        });
+
+        DeleteCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            var confirmation = await _confirmationService.ConfirmAsync(
+                new ConfirmationRequest(
+                    _subscriptionName,
+                    Source: null,
+                    "This subscription and its messages will be permanently deleted.",
+                    ConfirmationRisk.Irreversible,
+                    ConfirmActionLabel: "Delete"));
+            if (confirmation != ConfirmationResult.Confirmed)
+            {
+                PresentAdminCancelled("Delete cancelled — subscription was not deleted.");
+                return;
+            }
+
+            var result = await _subSvc.DeleteAsync(
+                _topicName,
+                _subscriptionName,
+                Info?.ServiceVersion);
+            PresentAdminResult(result);
+            if (result.IsSuccess)
+            {
+                _navigateBack.OnNext(Unit.Default);
+                return;
+            }
+
+            if (result.Kind == EntityLifecycleKind.Conflict && result.Entity is not null)
+                Info = result.Entity;
         });
 
         var hasSession = this.WhenAnyValue(x => x.IsReceiveMode);
@@ -750,5 +814,49 @@ public class SubscriptionDetailViewModel : ReactiveObject
         ForwardTo = s.ForwardTo;
         ForwardDeadLetteredMessagesTo = s.ForwardDeadLetteredMessagesTo;
         UserMetadata = s.UserMetadata;
+    }
+
+    private void PresentAdminCancelled(string message)
+    {
+        IsAdminCancelled = true;
+        AdminOutcomeKind = null;
+        AdminStatus = message;
+        Error = null;
+        RaiseAdminFlags();
+    }
+
+    private void PresentAdminFailed(string message)
+    {
+        IsAdminCancelled = false;
+        AdminOutcomeKind = EntityLifecycleKind.Failed;
+        AdminStatus = message;
+        RaiseAdminFlags();
+    }
+
+    private void PresentAdminResult<T>(EntityLifecycleResult<T> result)
+    {
+        IsAdminCancelled = false;
+        AdminOutcomeKind = result.Kind;
+        AdminStatus = result.SafeMessage;
+        if (!result.IsSuccess)
+            Error = result.SafeMessage;
+        RaiseAdminFlags();
+    }
+
+    private void ClearAdminPresentation()
+    {
+        IsAdminCancelled = false;
+        AdminOutcomeKind = null;
+        AdminStatus = null;
+        RaiseAdminFlags();
+    }
+
+    private void RaiseAdminFlags()
+    {
+        this.RaisePropertyChanged(nameof(IsAdminConflict));
+        this.RaisePropertyChanged(nameof(IsAdminStale));
+        this.RaisePropertyChanged(nameof(IsAdminValidationFailed));
+        this.RaisePropertyChanged(nameof(IsAdminFailed));
+        this.RaisePropertyChanged(nameof(IsAdminSucceeded));
     }
 }

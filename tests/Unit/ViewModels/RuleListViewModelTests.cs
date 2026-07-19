@@ -27,7 +27,7 @@ public sealed class RuleListViewModelTests
             ActionExpression: null,
             ServiceVersion: "v1"));
 
-        var vm = new RuleListViewModel(svc, "orders", "retail");
+        var vm = new RuleListViewModel(svc, new ConfirmAllService(), "orders", "retail");
         await vm.RefreshCommand.Execute().ToTask();
 
         Assert.Equal(2, vm.Rules.Count);
@@ -45,7 +45,7 @@ public sealed class RuleListViewModelTests
     [Fact]
     public void SelectingCatchAllFilterKind_ClearsExpressionAndExposesCatchAllFlag()
     {
-        var vm = new RuleListViewModel(new FakeSubscriptionService(), "orders", "retail");
+        var vm = new RuleListViewModel(new FakeSubscriptionService(), new ConfirmAllService(), "orders", "retail");
         vm.NewRuleExpression = "sys.Label = 'x'";
         vm.NewRuleFilterKind = RuleFilterKind.CatchAll;
 
@@ -66,7 +66,7 @@ public sealed class RuleListViewModelTests
             "v2",
             "stale version");
 
-        var vm = new RuleListViewModel(svc, "orders", "retail");
+        var vm = new RuleListViewModel(svc, new ConfirmAllService(), "orders", "retail");
         await vm.RefreshCommand.Execute().ToTask();
         vm.SelectedRule = vm.Rules[0];
         vm.IsEditing = true;
@@ -143,5 +143,13 @@ public sealed class RuleListViewModelTests
             string? expectedVersion = null,
             CancellationToken ct = default) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class ConfirmAllService : IConfirmationService
+    {
+        public Task<ConfirmationResult> ConfirmAsync(
+            ConfirmationRequest request,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(ConfirmationResult.Confirmed);
     }
 }

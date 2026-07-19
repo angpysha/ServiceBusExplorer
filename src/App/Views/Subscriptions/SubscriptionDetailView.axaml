@@ -11,17 +11,48 @@
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="16,12,16,6">
       <TextBlock Text="{Binding Info.Name, FallbackValue='Subscription'}"
                  FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Content="Delete"
+              Command="{Binding DeleteCommand}"
+              VerticalAlignment="Center"
+              Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+              AutomationProperties.Name="Delete subscription"
+              AutomationProperties.HelpText="Requires confirmation with the exact subscription name." />
       <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
                  Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                  VerticalAlignment="Center" />
     </StackPanel>
 
-    <!-- Error + purge operation state -->
+    <!-- Error + purge + admin operation state -->
     <StackPanel Grid.Row="1" Margin="16,0,16,4" Spacing="4">
       <TextBlock Text="{Binding Error}"
                  IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                  Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
                  TextWrapping="Wrap" />
+      <StackPanel Spacing="2"
+                  IsVisible="{Binding AdminStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Text="{Binding AdminStatus}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   AutomationProperties.Name="Administration status"
+                   AutomationProperties.LiveSetting="Polite" />
+        <TextBlock Text="Stale — conflict with service state"
+                   IsVisible="{Binding IsAdminStale}"
+                   Foreground="#C19C00"
+                   FontSize="11"
+                   AutomationProperties.Name="Administration stale conflict" />
+        <TextBlock Text="Validation failed"
+                   IsVisible="{Binding IsAdminValidationFailed}"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   FontSize="11" />
+        <TextBlock Text="Administration failed"
+                   IsVisible="{Binding IsAdminFailed}"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   FontSize="11" />
+        <TextBlock Text="Administration succeeded"
+                   IsVisible="{Binding IsAdminSucceeded}"
+                   Foreground="#107C10"
+                   FontSize="11" />
+      </StackPanel>
       <StackPanel Spacing="4"
                   IsVisible="{Binding PurgeStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
         <TextBlock Text="{Binding PurgeStatus}"

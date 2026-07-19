@@ -13,8 +13,16 @@ public partial class ConfirmationDialog : Window
     public ConfirmationDialog(ConfirmationRequest request)
         : this()
     {
-        TargetText.Text = $"Target: {request.Target}\nSource: {FormatSource(request.Source)}";
+        TargetText.Text = request.Source is { } source
+            ? $"Target: {request.Target}\nSource: {FormatSource(source)}"
+            : $"Target: {request.Target}";
         ConsequenceText.Text = request.Consequence;
+        ConfirmButton.Content = string.IsNullOrWhiteSpace(request.ConfirmActionLabel)
+            ? "Confirm"
+            : request.ConfirmActionLabel;
+        ConfirmButton.SetValue(
+            Avalonia.Automation.AutomationProperties.NameProperty,
+            $"Confirm irreversible {request.ConfirmActionLabel}");
         Opened += (_, _) => CancelButton.Focus();
     }
 

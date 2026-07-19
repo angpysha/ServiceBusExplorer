@@ -344,7 +344,8 @@ public class QueueDetailViewModel : ReactiveObject
                     _queueName,
                     source,
                     "All messages in this source will be permanently removed.",
-                    ConfirmationRisk.Irreversible));
+                    ConfirmationRisk.Irreversible,
+                    ConfirmActionLabel: "Purge"));
             if (confirmation != ConfirmationResult.Confirmed)
             {
                 PurgeStatus = "Purge cancelled — no messages were removed.";

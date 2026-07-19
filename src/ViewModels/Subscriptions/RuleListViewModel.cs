@@ -9,6 +9,7 @@ namespace ServiceBusExplorer.ViewModels;
 public class RuleListViewModel : ReactiveObject
 {
     private readonly ISubscriptionService _svc;
+    private readonly IConfirmationService _confirmationService;
     private readonly string _topicName;
     private readonly string _subscriptionName;
     private readonly SourceList<SubscriptionRule> _source = new();
@@ -22,8 +23,35 @@ public class RuleListViewModel : ReactiveObject
     private RuleFilterKind _newRuleFilterKind = RuleFilterKind.Sql;
     private string? _editExpression;
     private RuleFilterKind _editFilterKind = RuleFilterKind.Sql;
+    private string? _adminStatus;
+    private EntityLifecycleKind? _adminOutcomeKind;
+    private bool _isAdminCancelled;
 
     public ReadOnlyObservableCollection<SubscriptionRule> Rules { get; }
+
+    public string? AdminStatus
+    {
+        get => _adminStatus;
+        private set => this.RaiseAndSetIfChanged(ref _adminStatus, value);
+    }
+
+    public EntityLifecycleKind? AdminOutcomeKind
+    {
+        get => _adminOutcomeKind;
+        private set => this.RaiseAndSetIfChanged(ref _adminOutcomeKind, value);
+    }
+
+    public bool IsAdminCancelled
+    {
+        get => _isAdminCancelled;
+        private set => this.RaiseAndSetIfChanged(ref _isAdminCancelled, value);
+    }
+
+    public bool IsAdminConflict => AdminOutcomeKind == EntityLifecycleKind.Conflict;
+    public bool IsAdminStale => IsAdminConflict;
+    public bool IsAdminValidationFailed => AdminOutcomeKind == EntityLifecycleKind.ValidationFailed;
+    public bool IsAdminFailed => AdminOutcomeKind == EntityLifecycleKind.Failed;
+    public bool IsAdminSucceeded => AdminOutcomeKind == EntityLifecycleKind.Succeeded;
 
     public bool IsLoading
     {
@@ -128,9 +156,14 @@ public class RuleListViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> BeginEditCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelEditCommand { get; }
 
-    public RuleListViewModel(ISubscriptionService svc, string topicName, string subscriptionName)
+    public RuleListViewModel(
+        ISubscriptionService svc,
+        IConfirmationService confirmationService,
+        string topicName,
+        string subscriptionName)
     {
         _svc = svc;
+        _confirmationService = confirmationService;
         _topicName = topicName;
         _subscriptionName = subscriptionName;
 
@@ -179,6 +212,7 @@ public class RuleListViewModel : ReactiveObject
                 NewRuleFilterKind == RuleFilterKind.CatchAll ? null : NewRuleExpression,
                 ActionExpression: null);
             var result = await _svc.CreateRuleAsync(_topicName, _subscriptionName, opts);
+            PresentAdminResult(result);
             if (result.IsSuccess && result.Entity is not null)
             {
                 _source.Add(result.Entity);
@@ -208,6 +242,7 @@ public class RuleListViewModel : ReactiveObject
                 FilterExpression = EditFilterKind == RuleFilterKind.CatchAll ? null : EditExpression
             };
             var result = await _svc.UpdateRuleAsync(_topicName, _subscriptionName, updated);
+            PresentAdminResult(result);
             if (result.IsSuccess && result.Entity is not null)
             {
                 ReplaceRule(result.Entity);
@@ -233,12 +268,26 @@ public class RuleListViewModel : ReactiveObject
         DeleteCommand = ReactiveCommand.CreateFromTask<string, Unit>(async name =>
         {
             Error = null;
+            var confirmation = await _confirmationService.ConfirmAsync(
+                new ConfirmationRequest(
+                    name,
+                    Source: null,
+                    "This subscription rule will be permanently deleted.",
+                    ConfirmationRisk.Irreversible,
+                    ConfirmActionLabel: "Delete"));
+            if (confirmation != ConfirmationResult.Confirmed)
+            {
+                PresentAdminCancelled("Delete cancelled — rule was not deleted.");
+                return Unit.Default;
+            }
+
             var existing = _source.Items.FirstOrDefault(r => r.Name == name);
             var result = await _svc.DeleteRuleAsync(
                 _topicName,
                 _subscriptionName,
                 name,
                 existing?.ServiceVersion);
+            PresentAdminResult(result);
             if (result.IsSuccess)
             {
                 _source.Edit(list =>
@@ -248,6 +297,9 @@ public class RuleListViewModel : ReactiveObject
                 });
                 return Unit.Default;
             }
+
+            if (result.Kind == EntityLifecycleKind.Conflict && result.Entity is not null)
+                ReplaceRule(result.Entity);
 
             Error = result.SafeMessage;
             await RefreshAuthoritativeAsync();
@@ -296,6 +348,34 @@ public class RuleListViewModel : ReactiveObject
 
             list.Add(rule);
         });
+    }
+
+    private void PresentAdminCancelled(string message)
+    {
+        IsAdminCancelled = true;
+        AdminOutcomeKind = null;
+        AdminStatus = message;
+        Error = null;
+        RaiseAdminFlags();
+    }
+
+    private void PresentAdminResult<T>(EntityLifecycleResult<T> result)
+    {
+        IsAdminCancelled = false;
+        AdminOutcomeKind = result.Kind;
+        AdminStatus = result.SafeMessage;
+        if (!result.IsSuccess)
+            Error = result.SafeMessage;
+        RaiseAdminFlags();
+    }
+
+    private void RaiseAdminFlags()
+    {
+        this.RaisePropertyChanged(nameof(IsAdminConflict));
+        this.RaisePropertyChanged(nameof(IsAdminStale));
+        this.RaisePropertyChanged(nameof(IsAdminValidationFailed));
+        this.RaisePropertyChanged(nameof(IsAdminFailed));
+        this.RaisePropertyChanged(nameof(IsAdminSucceeded));
     }
 
     private async Task RefreshAuthoritativeAsync()

@@ -20,12 +20,16 @@ public enum ConfirmationResult
 /// <summary>
 /// Contains structured, non-secret context for a destructive-operation confirmation.
 /// </summary>
-/// <param name="Target">The entity that will be affected.</param>
-/// <param name="Source">The exact message source that will be affected.</param>
+/// <param name="Target">The entity that will be affected (exact name/path).</param>
+/// <param name="Source">
+/// The exact message source for source-specific work; null for entity/rule administration.
+/// </param>
 /// <param name="Consequence">A concise description of the irreversible consequence.</param>
 /// <param name="Risk">The operation risk level.</param>
+/// <param name="ConfirmActionLabel">Action-specific confirm button label (e.g. Delete, Purge).</param>
 public sealed record ConfirmationRequest(
     string Target,
-    MessageSource Source,
+    MessageSource? Source,
     string Consequence,
-    ConfirmationRisk Risk);
+    ConfirmationRisk Risk,
+    string ConfirmActionLabel = "Confirm");

@@ -20,12 +20,38 @@
                  Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
     </StackPanel>
 
-    <!-- Error -->
-    <TextBlock Grid.Row="1"
-               Text="{Binding Error}"
-               IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
-               Margin="16,0,16,8" TextWrapping="Wrap" />
+    <!-- Error + admin status -->
+    <StackPanel Grid.Row="1" Margin="16,0,16,8" Spacing="4">
+      <TextBlock Text="{Binding Error}"
+                 IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                 Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                 TextWrapping="Wrap" />
+      <StackPanel Spacing="2"
+                  IsVisible="{Binding AdminStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Text="{Binding AdminStatus}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   AutomationProperties.Name="Administration status"
+                   AutomationProperties.LiveSetting="Polite" />
+        <TextBlock Text="Stale — conflict with service state"
+                   IsVisible="{Binding IsAdminStale}"
+                   Foreground="#C19C00"
+                   FontSize="11"
+                   AutomationProperties.Name="Administration stale conflict" />
+        <TextBlock Text="Validation failed"
+                   IsVisible="{Binding IsAdminValidationFailed}"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   FontSize="11" />
+        <TextBlock Text="Administration failed"
+                   IsVisible="{Binding IsAdminFailed}"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   FontSize="11" />
+        <TextBlock Text="Administration succeeded"
+                   IsVisible="{Binding IsAdminSucceeded}"
+                   Foreground="#107C10"
+                   FontSize="11" />
+      </StackPanel>
+    </StackPanel>
 
     <!-- Quick-create form -->
     <Border Grid.Row="2"
@@ -48,7 +74,7 @@
     <!-- Column headers -->
     <Grid Grid.Row="3" RowDefinitions="Auto,*">
       <Grid Grid.Row="0"
-            ColumnDefinitions="*,100,100,100,80"
+            ColumnDefinitions="*,100,100,100,80,Auto"
             Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}"
             Margin="16,0">
         <TextBlock Grid.Column="0" Text="Name" FontWeight="SemiBold" Padding="8,6" />
@@ -56,6 +82,7 @@
         <TextBlock Grid.Column="2" Text="Dead Letter" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
         <TextBlock Grid.Column="3" Text="Scheduled" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Right" />
         <TextBlock Grid.Column="4" Text="Status" FontWeight="SemiBold" Padding="8,6" HorizontalAlignment="Center" />
+        <TextBlock Grid.Column="5" Text="" Padding="8,6" />
       </Grid>
 
       <ListBox Grid.Row="1"
@@ -66,7 +93,7 @@
                BorderThickness="0">
         <ListBox.ItemTemplate>
           <DataTemplate DataType="{x:Type domain:QueueInfo}">
-            <Grid ColumnDefinitions="*,100,100,100,80">
+            <Grid ColumnDefinitions="*,100,100,100,80,Auto">
               <TextBlock Grid.Column="0" Text="{Binding Name}" Padding="8,4" VerticalAlignment="Center" />
               <TextBlock Grid.Column="1" Text="{Binding ActiveMessageCount}" Padding="8,4"
                          VerticalAlignment="Center" HorizontalAlignment="Right" />
@@ -78,6 +105,12 @@
               <TextBlock Grid.Column="4" Text="{Binding Status}" Padding="8,4"
                          VerticalAlignment="Center" HorizontalAlignment="Center"
                          Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+              <Button Grid.Column="5" Content="Delete"
+                      Command="{Binding $parent[ListBox].((vm:QueueListViewModel)DataContext).DeleteCommand}"
+                      CommandParameter="{Binding Name}"
+                      Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                      Padding="8,2"
+                      AutomationProperties.Name="Delete queue" />
             </Grid>
           </DataTemplate>
         </ListBox.ItemTemplate>
