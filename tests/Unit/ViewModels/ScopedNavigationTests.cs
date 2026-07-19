@@ -181,7 +181,7 @@ public sealed class ScopedNavigationTests
 
         var eventHubSvc = new StubEventHubService();
         var eventHubDetail = new EventHubDetailViewModel(eventHubSvc);
-        var queues = new QueueListViewModel(namespaceSvc, queueSvc, browse, new StubMessageSendService(), confirmation);
+        var queues = new QueueListViewModel(namespaceSvc, queueSvc, browse, new StubMessageSendService(), new StubMessageReceiveService(), confirmation);
         var topics = new TopicListViewModel(
             namespaceSvc,
             topicSvc,
@@ -189,6 +189,7 @@ public sealed class ScopedNavigationTests
             queueSvc,
             browse,
             new StubMessageSendService(),
+            new StubMessageReceiveService(),
             confirmation);
 
         var context = LiveConnectionContext.Create(
@@ -404,5 +405,20 @@ public sealed class ScopedNavigationTests
             int sendCount = 1,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new MessageSendResult(MessageSendStatus.Succeeded, target.SuccessDescription));
+    }
+
+    private sealed class StubMessageReceiveService : IMessageReceiveService
+    {
+        public Task<IReceiveSession> OpenPeekLockAsync(
+            EntityAddress address,
+            MessageSource source,
+            SessionRequest? sessionRequest = null,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ReceiveAndDeleteResult> ReceiveAndDeleteAsync(
+            ConfirmedReceiveAndDeleteRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

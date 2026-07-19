@@ -195,6 +195,7 @@ public class MessageBrowseTests
             new StubQueueService(),
             browse,
             new StubMessageSendService(),
+            new StubMessageReceiveService(),
             new NoOpConfirmationService(),
             "orders");
 
@@ -217,6 +218,7 @@ public class MessageBrowseTests
             new StubQueueService(),
             browse,
             new StubMessageSendService(),
+            new StubMessageReceiveService(),
             new NoOpConfirmationService(),
             "orders")
         {
@@ -291,6 +293,7 @@ public class MessageBrowseTests
             new StubQueueService(),
             browse,
             new StubMessageSendService(),
+            new StubMessageReceiveService(),
             confirmation,
             "orders",
             text => { onCopy(text); return Task.CompletedTask; })
@@ -411,6 +414,21 @@ public class MessageBrowseTests
             int sendCount = 1,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new MessageSendResult(MessageSendStatus.Succeeded, target.SuccessDescription));
+    }
+
+    private sealed class StubMessageReceiveService : IMessageReceiveService
+    {
+        public Task<IReceiveSession> OpenPeekLockAsync(
+            EntityAddress address,
+            MessageSource source,
+            SessionRequest? sessionRequest = null,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ReceiveAndDeleteResult> ReceiveAndDeleteAsync(
+            ConfirmedReceiveAndDeleteRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class StubQueueService : IQueueService

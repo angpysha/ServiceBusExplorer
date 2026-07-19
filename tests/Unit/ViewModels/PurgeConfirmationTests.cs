@@ -12,7 +12,7 @@ public class PurgeConfirmationTests
         var queue = new RecordingQueueService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
-        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), confirmation, "orders");
+        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), new StubMessageReceiveService(), confirmation, "orders");
 
         await viewModel.PurgeCommand.Execute().ToTask();
 
@@ -26,7 +26,7 @@ public class PurgeConfirmationTests
         var queue = new RecordingQueueService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Cancelled);
-        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), confirmation, "orders")
+        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), new StubMessageReceiveService(), confirmation, "orders")
         {
             SelectedSource = MessageSource.DeadLetter
         };
@@ -46,7 +46,7 @@ public class PurgeConfirmationTests
         var queue = new RecordingQueueService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
-        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), confirmation, "orders")
+        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), new StubMessageReceiveService(), confirmation, "orders")
         {
             SelectedSource = MessageSource.TransferDeadLetter
         };
@@ -69,6 +69,7 @@ public class PurgeConfirmationTests
             queue,
             browse,
             new StubMessageSendService(),
+            new StubMessageReceiveService(),
             confirmation,
             "sales",
             "regional")
@@ -93,6 +94,21 @@ public class PurgeConfirmationTests
             int sendCount = 1,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new MessageSendResult(MessageSendStatus.Succeeded, target.SuccessDescription));
+    }
+
+    private sealed class StubMessageReceiveService : IMessageReceiveService
+    {
+        public Task<IReceiveSession> OpenPeekLockAsync(
+            EntityAddress address,
+            MessageSource source,
+            SessionRequest? sessionRequest = null,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ReceiveAndDeleteResult> ReceiveAndDeleteAsync(
+            ConfirmedReceiveAndDeleteRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class RecordingConfirmationService(ConfirmationResult result)

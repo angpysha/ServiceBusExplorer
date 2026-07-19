@@ -8,6 +8,7 @@ public class TopicDetailViewModel : ReactiveObject
 {
     private readonly ITopicService _topicSvc;
     private readonly IMessageBrowseService _browseService;
+    private readonly IMessageReceiveService _receiveService;
     private readonly IConfirmationService _confirmationService;
     private readonly string _topicName;
     private readonly Subject<Unit> _navigateBack = new();
@@ -111,11 +112,13 @@ public class TopicDetailViewModel : ReactiveObject
         IQueueService queueSvc,
         IMessageBrowseService browseService,
         IMessageSendService sendService,
+        IMessageReceiveService receiveService,
         IConfirmationService confirmationService,
         string topicName)
     {
         _topicSvc = topicSvc;
         _browseService = browseService;
+        _receiveService = receiveService;
         _confirmationService = confirmationService;
         _topicName = topicName;
         Subscriptions = new SubscriptionListViewModel(subscriptionSvc, topicName);
@@ -136,6 +139,7 @@ public class TopicDetailViewModel : ReactiveObject
                         queueSvc,
                         _browseService,
                         sendService,
+                        _receiveService,
                         _confirmationService,
                         topicName,
                         sub.Name);

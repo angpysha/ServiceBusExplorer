@@ -1,0 +1,270 @@
+#nullable enable
+using System.Text;
+using Azure.Messaging.ServiceBus;
+using Microsoft.Extensions.Logging.Abstractions;
+using ServiceBusExplorer.Services;
+using Xunit;
+
+namespace ServiceBusExplorer.ContractTests.Messaging;
+
+public sealed class MessageReceiveContractTests
+{
+    [Theory]
+    [InlineData(MessageSource.Active, SubQueue.None)]
+    [InlineData(MessageSource.DeadLetter, SubQueue.DeadLetter)]
+    [InlineData(MessageSource.TransferDeadLetter, SubQueue.TransferDeadLetter)]
+    public async Task OpenPeekLockAsync_MapsExplicitSourceExhaustively(
+        MessageSource source,
+        SubQueue expectedSubQueue)
+    {
+        var adapter = new RecordingReceiveAdapter();
+        var service = CreateService(adapter);
+
+        var session = await service.OpenPeekLockAsync(
+            new EntityAddress("orders"),
+            source);
+
+        Assert.Equal("orders", session.EntityPath);
+        Assert.Equal(source, session.Source);
+        Assert.Equal(expectedSubQueue, adapter.LastPeekLockSubQueue);
+        Assert.False(session.IsDisposed);
+        Assert.False(session.SessionAborted.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task OpenPeekLockAsync_RejectsNonNullSessionRequestUntilSessionSupportExists()
+    {
+        var service = CreateService(new RecordingReceiveAdapter());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.OpenPeekLockAsync(
+                new EntityAddress("orders"),
+                MessageSource.Active,
+                new SessionRequest("s1")));
+
+        Assert.Contains("Session-aware", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task OpenPeekLockAsync_Dispose_CancelsSessionAndMarksDisposed()
+    {
+        var service = CreateService(new RecordingReceiveAdapter());
+        var session = await service.OpenPeekLockAsync(
+            new EntityAddress("orders"),
+            MessageSource.Active);
+
+        await session.DisposeAsync();
+
+        Assert.True(session.IsDisposed);
+        Assert.True(session.SessionAborted.IsCancellationRequested);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            session.ReceiveBatchAsync(1));
+    }
+
+    [Fact]
+    public async Task OpenPeekLockAsync_HonoursCallerCancellationBeforeOpen()
+    {
+        var adapter = new RecordingReceiveAdapter();
+        var service = CreateService(adapter);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.OpenPeekLockAsync(
+                new EntityAddress("orders"),
+                MessageSource.Active,
+                cancellationToken: cts.Token));
+
+        Assert.Equal(0, adapter.PeekLockOpenCount);
+    }
+
+    [Fact]
+    public void ReceiveAndDeleteConfirmation_CannotBeCreatedFromCancelledResult()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            ReceiveAndDeleteConfirmation.Create(
+                ConfirmationResult.Cancelled,
+                new EntityAddress("orders"),
+                MessageSource.Active));
+
+        Assert.False(ReceiveAndDeleteConfirmation.TryCreate(
+            ConfirmationResult.Cancelled,
+            new EntityAddress("orders"),
+            MessageSource.DeadLetter,
+            out var confirmation));
+        Assert.Null(confirmation);
+    }
+
+    [Fact]
+    public void ReceiveAndDeleteAsync_WithoutConfirmationEvidence_IsImpossibleAtTypeBoundary()
+    {
+        // Compile-time contract: ConfirmedReceiveAndDeleteRequest requires
+        // ReceiveAndDeleteConfirmation, which itself requires ConfirmationResult.Confirmed.
+        var confirmation = ReceiveAndDeleteConfirmation.Create(
+            ConfirmationResult.Confirmed,
+            new EntityAddress("orders"),
+            MessageSource.Active);
+        Assert.NotNull(confirmation);
+    }
+
+    [Fact]
+    public async Task ReceiveAndDeleteAsync_WithConfirmedToken_DeletesAndReportsDisplayLoss()
+    {
+        var adapter = new RecordingReceiveAdapter
+        {
+            ReceiveAndDeleteMessages =
+            [
+                CreateMessage("m1", 1),
+                CreateMessage("m2", 2)
+            ]
+        };
+        var service = CreateService(adapter);
+        var confirmation = ReceiveAndDeleteConfirmation.Create(
+            ConfirmationResult.Confirmed,
+            new EntityAddress("orders"),
+            MessageSource.DeadLetter);
+
+        var result = await service.ReceiveAndDeleteAsync(
+            new ConfirmedReceiveAndDeleteRequest(confirmation, MaxMessages: 10));
+
+        Assert.Equal(2, result.Messages.Count);
+        Assert.True(result.ReportsDisplayLossRisk);
+        Assert.Contains("Permanently removed", result.SafeMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(SubQueue.DeadLetter, adapter.LastReceiveAndDeleteSubQueue);
+        Assert.Equal("orders", adapter.LastReceiveAndDeletePath);
+        Assert.Equal(1, adapter.ReceiveAndDeleteCallCount);
+    }
+
+    [Fact]
+    public async Task ReceiveAndDeleteAsync_UsesExplicitSourceOnly_NoActiveDefault()
+    {
+        var adapter = new RecordingReceiveAdapter();
+        var service = CreateService(adapter);
+        var confirmation = ReceiveAndDeleteConfirmation.Create(
+            ConfirmationResult.Confirmed,
+            new EntityAddress("sales/Subscriptions/regional"),
+            MessageSource.TransferDeadLetter);
+
+        await service.ReceiveAndDeleteAsync(
+            new ConfirmedReceiveAndDeleteRequest(confirmation, MaxMessages: 5));
+
+        Assert.Equal(SubQueue.TransferDeadLetter, adapter.LastReceiveAndDeleteSubQueue);
+        Assert.NotEqual(SubQueue.None, adapter.LastReceiveAndDeleteSubQueue);
+    }
+
+    [Fact]
+    public async Task ReceiveAndDeleteAsync_HonoursCancellation()
+    {
+        var adapter = new RecordingReceiveAdapter { ThrowOnReceiveAndDelete = true };
+        var service = CreateService(adapter);
+        var confirmation = ReceiveAndDeleteConfirmation.Create(
+            ConfirmationResult.Confirmed,
+            new EntityAddress("orders"),
+            MessageSource.Active);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.ReceiveAndDeleteAsync(
+                new ConfirmedReceiveAndDeleteRequest(confirmation, 5),
+                cts.Token));
+    }
+
+    private static MessageReceiveService CreateService(IServiceBusReceiveAdapter adapter) =>
+        new(adapter, NullLogger<MessageReceiveService>.Instance);
+
+    private static ServiceBusReceivedMessage CreateMessage(string messageId, long sequenceNumber)
+    {
+        return ServiceBusModelFactory.ServiceBusReceivedMessage(
+            body: new BinaryData(Encoding.UTF8.GetBytes("sample")),
+            messageId: messageId,
+            sequenceNumber: sequenceNumber,
+            contentType: "text/plain",
+            lockTokenGuid: Guid.NewGuid());
+    }
+
+    private sealed class RecordingReceiveAdapter : IServiceBusReceiveAdapter
+    {
+        public IReadOnlyList<ServiceBusReceivedMessage> ReceiveAndDeleteMessages { get; init; } = [];
+        public bool ThrowOnReceiveAndDelete { get; init; }
+        public int PeekLockOpenCount { get; private set; }
+        public int ReceiveAndDeleteCallCount { get; private set; }
+        public SubQueue LastPeekLockSubQueue { get; private set; }
+        public SubQueue LastReceiveAndDeleteSubQueue { get; private set; }
+        public string? LastReceiveAndDeletePath { get; private set; }
+
+        public IReceiveSession OpenPeekLock(
+            string entityPath,
+            SubQueue subQueue,
+            MessageSource source)
+        {
+            PeekLockOpenCount++;
+            LastPeekLockSubQueue = subQueue;
+            return new FakeReceiveSession(entityPath, source);
+        }
+
+        public Task<IReadOnlyList<ServiceBusReceivedMessage>> ReceiveAndDeleteAsync(
+            string entityPath,
+            SubQueue subQueue,
+            int maxMessages,
+            TimeSpan maxWait,
+            CancellationToken cancellationToken)
+        {
+            ReceiveAndDeleteCallCount++;
+            LastReceiveAndDeleteSubQueue = subQueue;
+            LastReceiveAndDeletePath = entityPath;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (ThrowOnReceiveAndDelete)
+                cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(ReceiveAndDeleteMessages);
+        }
+    }
+
+    private sealed class FakeReceiveSession : IReceiveSession
+    {
+        private readonly CancellationTokenSource _abortCts = new();
+        private int _disposed;
+
+        public FakeReceiveSession(string entityPath, MessageSource source)
+        {
+            EntityPath = entityPath;
+            Source = source;
+        }
+
+        public string EntityPath { get; }
+        public MessageSource Source { get; }
+        public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
+        public CancellationToken SessionAborted =>
+            IsDisposed ? new CancellationToken(canceled: true) : _abortCts.Token;
+
+        public Task<IReadOnlyList<ReceivedMessage>> ReceiveBatchAsync(
+            int maxMessages = 20, TimeSpan? maxWait = null, CancellationToken ct = default)
+        {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(FakeReceiveSession));
+            return Task.FromResult<IReadOnlyList<ReceivedMessage>>([]);
+        }
+
+        public Task CompleteAsync(ReceivedMessage message, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task AbandonAsync(ReceivedMessage message, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task DeadLetterAsync(
+            ReceivedMessage message, string? reason = null, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task DeferAsync(ReceivedMessage message, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return ValueTask.CompletedTask;
+            _abortCts.Cancel();
+            _abortCts.Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
+}

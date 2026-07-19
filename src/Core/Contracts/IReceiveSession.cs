@@ -8,6 +8,20 @@ namespace ServiceBusExplorer;
 /// </summary>
 public interface IReceiveSession : IAsyncDisposable
 {
+    /// <summary>Entity path this session was opened against.</summary>
+    string EntityPath { get; }
+
+    /// <summary>Explicit message source this session was opened against.</summary>
+    MessageSource Source { get; }
+
+    /// <summary>True after <see cref="IAsyncDisposable.DisposeAsync"/> has completed.</summary>
+    bool IsDisposed { get; }
+
+    /// <summary>
+    /// Cancelled when the session is disposed or aborted. Callers may link work to this token.
+    /// </summary>
+    CancellationToken SessionAborted { get; }
+
     /// <summary>Receive up to <paramref name="maxMessages"/> messages with a peek-lock.</summary>
     Task<IReadOnlyList<ReceivedMessage>> ReceiveBatchAsync(
         int maxMessages = 20, TimeSpan? maxWait = null, CancellationToken ct = default);

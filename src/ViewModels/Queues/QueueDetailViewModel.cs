@@ -10,6 +10,7 @@ public class QueueDetailViewModel : ReactiveObject
 {
     private readonly IQueueService _svc;
     private readonly IMessageBrowseService _browseService;
+    private readonly IMessageReceiveService _receiveService;
     private readonly IConfirmationService _confirmationService;
     private readonly Func<string, Task> _copyToClipboard;
     private readonly string _queueName;
@@ -189,6 +190,7 @@ public class QueueDetailViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> StartReceiveCommand { get; }
     public ReactiveCommand<Unit, Unit> StopReceiveCommand { get; }
     public ReactiveCommand<Unit, Unit> ReceiveBatchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ReceiveAndDeleteCommand { get; }
     public ReactiveCommand<Unit, Unit> CopyObservedBodyCommand { get; }
     public ReactiveCommand<Unit, Unit> ExportObservedBodyCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> CompleteCommand { get; }
@@ -199,12 +201,14 @@ public class QueueDetailViewModel : ReactiveObject
         IQueueService svc,
         IMessageBrowseService browseService,
         IMessageSendService sendService,
+        IMessageReceiveService receiveService,
         IConfirmationService confirmationService,
         string queueName,
         Func<string, Task>? copyToClipboard = null)
     {
         _svc = svc;
         _browseService = browseService;
+        _receiveService = receiveService;
         _confirmationService = confirmationService;
         _copyToClipboard = copyToClipboard ?? (_ => Task.CompletedTask);
         _queueName = queueName;
@@ -333,7 +337,9 @@ public class QueueDetailViewModel : ReactiveObject
                     return;
                 }
 
-                _activeSession = await _svc.OpenReceiveSessionAsync(_queueName, source);
+                _activeSession = await _receiveService.OpenPeekLockAsync(
+                    new EntityAddress(_queueName),
+                    source);
                 _receivedSource.Clear();
                 IsReceiveMode = true;
             }
@@ -376,6 +382,47 @@ public class QueueDetailViewModel : ReactiveObject
                 IsLoading = false;
             }
         }, hasSession);
+
+        ReceiveAndDeleteCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedSource is not { } source)
+            {
+                Error = "Select a message source before receive-and-delete.";
+                return;
+            }
+
+            var address = new EntityAddress(_queueName);
+            var decision = await _confirmationService.ConfirmAsync(
+                new ConfirmationRequest(
+                    _queueName,
+                    source,
+                    "Messages will be permanently removed from the broker and may not be fully displayable after deletion.",
+                    ConfirmationRisk.Irreversible));
+
+            if (!ReceiveAndDeleteConfirmation.TryCreate(decision, address, source, out var confirmation)
+                || confirmation is null)
+            {
+                return;
+            }
+
+            IsLoading = true;
+            Error = null;
+            try
+            {
+                var result = await _receiveService.ReceiveAndDeleteAsync(
+                    new ConfirmedReceiveAndDeleteRequest(confirmation, PeekCount));
+                _receivedSource.Clear();
+                _receivedSource.AddRange(result.Messages);
+            }
+            catch (Exception ex)
+            {
+                Error = ex.Message;
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        });
 
         CopyObservedBodyCommand = ReactiveCommand.CreateFromTask(CopySelectedObservedBodyAsync);
         ExportObservedBodyCommand = ReactiveCommand.CreateFromTask(ExportSelectedObservedBodyAsync);

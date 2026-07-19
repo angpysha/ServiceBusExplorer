@@ -12,14 +12,44 @@ internal sealed class ReceiveSession : IReceiveSession
     private readonly ServiceBusReceiver _receiver;
     // Map lock-token → original SDK message, needed for settlement calls
     private readonly Dictionary<string, ServiceBusReceivedMessage> _pending = new();
+    private readonly CancellationTokenSource _abortCts = new();
+    private int _disposed;
 
-    internal ReceiveSession(ServiceBusReceiver receiver) => _receiver = receiver;
+    internal ReceiveSession(
+        ServiceBusReceiver receiver,
+        string entityPath,
+        MessageSource source)
+    {
+        _receiver = receiver;
+        EntityPath = entityPath;
+        Source = source;
+    }
+
+    /// <summary>
+    /// Backward-compatible constructor for callers that only supply a receiver.
+    /// Prefer the overload that records entity path and source.
+    /// </summary>
+    internal ReceiveSession(ServiceBusReceiver receiver)
+        : this(receiver, receiver.EntityPath, MessageSource.Active)
+    {
+    }
+
+    public string EntityPath { get; }
+
+    public MessageSource Source { get; }
+
+    public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
+
+    public CancellationToken SessionAborted =>
+        IsDisposed ? new CancellationToken(canceled: true) : _abortCts.Token;
 
     public async Task<IReadOnlyList<ReceivedMessage>> ReceiveBatchAsync(
         int maxMessages = 20, TimeSpan? maxWait = null, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _abortCts.Token);
         var timeout = maxWait ?? TimeSpan.FromSeconds(3);
-        var msgs = await _receiver.ReceiveMessagesAsync(maxMessages, timeout, ct);
+        var msgs = await _receiver.ReceiveMessagesAsync(maxMessages, timeout, linked.Token);
         var result = new List<ReceivedMessage>(msgs.Count);
         foreach (var m in msgs)
         {
@@ -31,6 +61,7 @@ internal sealed class ReceiveSession : IReceiveSession
 
     public async Task CompleteAsync(ReceivedMessage message, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         if (message.LockToken != null && _pending.TryGetValue(message.LockToken, out var m))
         {
             await _receiver.CompleteMessageAsync(m, ct);
@@ -40,6 +71,7 @@ internal sealed class ReceiveSession : IReceiveSession
 
     public async Task AbandonAsync(ReceivedMessage message, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         if (message.LockToken != null && _pending.TryGetValue(message.LockToken, out var m))
         {
             await _receiver.AbandonMessageAsync(m, cancellationToken: ct);
@@ -50,6 +82,7 @@ internal sealed class ReceiveSession : IReceiveSession
     public async Task DeadLetterAsync(ReceivedMessage message, string? reason = null,
         CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         if (message.LockToken != null && _pending.TryGetValue(message.LockToken, out var m))
         {
             await _receiver.DeadLetterMessageAsync(m, deadLetterReason: reason, cancellationToken: ct);
@@ -59,6 +92,7 @@ internal sealed class ReceiveSession : IReceiveSession
 
     public async Task DeferAsync(ReceivedMessage message, CancellationToken ct = default)
     {
+        ThrowIfDisposed();
         if (message.LockToken != null && _pending.TryGetValue(message.LockToken, out var m))
         {
             await _receiver.DeferMessageAsync(m, cancellationToken: ct);
@@ -66,7 +100,29 @@ internal sealed class ReceiveSession : IReceiveSession
         }
     }
 
-    public ValueTask DisposeAsync() => _receiver.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        try
+        {
+            _abortCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // already disposed
+        }
+
+        await _receiver.DisposeAsync();
+        _abortCts.Dispose();
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (IsDisposed)
+            throw new ObjectDisposedException(nameof(ReceiveSession));
+    }
 
     private static ReceivedMessage MapMessage(ServiceBusReceivedMessage m) => new(
         m.MessageId, m.Body.ToString(), m.ContentType ?? "application/octet-stream",
