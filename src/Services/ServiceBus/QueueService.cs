@@ -105,6 +105,11 @@ public class QueueService : IQueueService
         if (message.CorrelationId != null) msg.CorrelationId = message.CorrelationId;
         if (message.SessionId != null) msg.SessionId = message.SessionId;
         if (message.To != null) msg.To = message.To;
+        if (message.Subject != null) msg.Subject = message.Subject;
+        if (message.ReplyTo != null) msg.ReplyTo = message.ReplyTo;
+        if (message.ReplyToSessionId != null) msg.ReplyToSessionId = message.ReplyToSessionId;
+        if (message.PartitionKey != null) msg.PartitionKey = message.PartitionKey;
+        if (message.TimeToLive.HasValue) msg.TimeToLive = message.TimeToLive.Value;
         if (message.ScheduledEnqueueTime.HasValue)
             msg.ScheduledEnqueueTime = message.ScheduledEnqueueTime.Value;
         if (message.Properties != null)

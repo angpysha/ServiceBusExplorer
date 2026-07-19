@@ -12,7 +12,7 @@ public class PurgeConfirmationTests
         var queue = new RecordingQueueService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
-        var viewModel = new QueueDetailViewModel(queue, browse, confirmation, "orders");
+        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), confirmation, "orders");
 
         await viewModel.PurgeCommand.Execute().ToTask();
 
@@ -26,7 +26,7 @@ public class PurgeConfirmationTests
         var queue = new RecordingQueueService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Cancelled);
-        var viewModel = new QueueDetailViewModel(queue, browse, confirmation, "orders")
+        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), confirmation, "orders")
         {
             SelectedSource = MessageSource.DeadLetter
         };
@@ -46,7 +46,7 @@ public class PurgeConfirmationTests
         var queue = new RecordingQueueService();
         var browse = new NoOpBrowseService();
         var confirmation = new RecordingConfirmationService(ConfirmationResult.Confirmed);
-        var viewModel = new QueueDetailViewModel(queue, browse, confirmation, "orders")
+        var viewModel = new QueueDetailViewModel(queue, browse, new StubMessageSendService(), confirmation, "orders")
         {
             SelectedSource = MessageSource.TransferDeadLetter
         };
@@ -68,6 +68,7 @@ public class PurgeConfirmationTests
             new StubSubscriptionService(),
             queue,
             browse,
+            new StubMessageSendService(),
             confirmation,
             "sales",
             "regional")
@@ -82,6 +83,16 @@ public class PurgeConfirmationTests
             queue.PurgeCalls);
         var request = Assert.Single(confirmation.Requests);
         Assert.Equal("sales/Subscriptions/regional", request.Target);
+    }
+
+    private sealed class StubMessageSendService : IMessageSendService
+    {
+        public Task<MessageSendResult> SendAsync(
+            SendTargetContext target,
+            MessageDraft draft,
+            int sendCount = 1,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new MessageSendResult(MessageSendStatus.Succeeded, target.SuccessDescription));
     }
 
     private sealed class RecordingConfirmationService(ConfirmationResult result)

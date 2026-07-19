@@ -1,6 +1,7 @@
 using System.Reactive;
 using System.Text.Json;
 using ReactiveUI;
+using ServiceBusExplorer;
 
 namespace ServiceBusExplorer.ViewModels;
 
@@ -12,6 +13,10 @@ public class SendMessageViewModel : ReactiveObject
     private string? _correlationId;
     private string? _sessionId;
     private string? _to;
+    private string? _subject;
+    private string? _replyTo;
+    private string? _replyToSessionId;
+    private string? _partitionKey;
     private string _propertiesJson = "";
     private bool _isSending;
     private string? _error;
@@ -19,6 +24,8 @@ public class SendMessageViewModel : ReactiveObject
     private int _sendCount = 1;
     private bool _useScheduledTime;
     private TimeSpan _scheduleDelay = TimeSpan.FromMinutes(5);
+    private bool _useTimeToLive;
+    private TimeSpan _timeToLive = TimeSpan.FromHours(1);
 
     public string Body
     {
@@ -54,6 +61,30 @@ public class SendMessageViewModel : ReactiveObject
     {
         get => _to;
         set => this.RaiseAndSetIfChanged(ref _to, value);
+    }
+
+    public string? Subject
+    {
+        get => _subject;
+        set => this.RaiseAndSetIfChanged(ref _subject, value);
+    }
+
+    public string? ReplyTo
+    {
+        get => _replyTo;
+        set => this.RaiseAndSetIfChanged(ref _replyTo, value);
+    }
+
+    public string? ReplyToSessionId
+    {
+        get => _replyToSessionId;
+        set => this.RaiseAndSetIfChanged(ref _replyToSessionId, value);
+    }
+
+    public string? PartitionKey
+    {
+        get => _partitionKey;
+        set => this.RaiseAndSetIfChanged(ref _partitionKey, value);
     }
 
     public string PropertiesJson
@@ -98,11 +129,23 @@ public class SendMessageViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _scheduleDelay, value);
     }
 
+    public bool UseTimeToLive
+    {
+        get => _useTimeToLive;
+        set => this.RaiseAndSetIfChanged(ref _useTimeToLive, value);
+    }
+
+    public TimeSpan TimeToLive
+    {
+        get => _timeToLive;
+        set => this.RaiseAndSetIfChanged(ref _timeToLive, value);
+    }
+
     public ReactiveCommand<Unit, Unit> SendCommand { get; }
     public SendTargetContext Target { get; }
     public string DestinationDescription => Target.DestinationDescription;
 
-    public SendMessageViewModel(IQueueService svc, SendTargetContext target)
+    public SendMessageViewModel(IMessageSendService sendService, SendTargetContext target)
     {
         Target = target;
         var canSend = this.WhenAnyValue(x => x.IsSending, sending => !sending);
@@ -113,81 +156,142 @@ public class SendMessageViewModel : ReactiveObject
             Outcome = null;
             try
             {
-                if (string.IsNullOrWhiteSpace(Body))
+                if (!TryBuildDraft(out var draft, out var buildError))
                 {
-                    Error = $"{Target.FailurePrefix}: Body is required.";
+                    Error = buildError;
                     return;
                 }
 
-                if (SendCount is < 1 or > 1000)
+                var result = await sendService.SendAsync(Target, draft!, SendCount);
+                if (result.Status == MessageSendStatus.Succeeded)
                 {
-                    Error = $"{Target.FailurePrefix}: Message count must be between 1 and 1000.";
-                    return;
+                    Body = "";
+                    Outcome = result.SafeMessage;
                 }
-
-                if (UseScheduledTime)
+                else
                 {
-                    DurationValue scheduleDelay;
-                    try
-                    {
-                        scheduleDelay = DurationValue.FromTimeSpan(ScheduleDelay);
-                    }
-                    catch (ArgumentException)
-                    {
-                        Error = $"{Target.FailurePrefix}: Schedule delay must be a non-negative whole-millisecond duration.";
-                        return;
-                    }
-
-                    if (DurationConstraint.ScheduledEnqueueDelay.Validate(scheduleDelay) is { } validationError)
-                    {
-                        Error = $"{Target.FailurePrefix}: {validationError}";
-                        return;
-                    }
+                    Error = result.SafeMessage;
                 }
-
-                IReadOnlyDictionary<string, object>? props = null;
-                if (!string.IsNullOrWhiteSpace(PropertiesJson))
-                {
-                    try
-                    {
-                        props = JsonSerializer.Deserialize<Dictionary<string, object>>(PropertiesJson);
-                    }
-                    catch
-                    {
-                        Error = $"{Target.FailurePrefix}: invalid JSON in Application Properties.";
-                        return;
-                    }
-                }
-
-                var baseMsg = new OutboundMessage(
-                    Body: Body,
-                    ContentType: string.IsNullOrWhiteSpace(ContentType) ? "application/json" : ContentType,
-                    MessageId: string.IsNullOrWhiteSpace(MessageId) ? null : MessageId,
-                    CorrelationId: string.IsNullOrWhiteSpace(CorrelationId) ? null : CorrelationId,
-                    SessionId: string.IsNullOrWhiteSpace(SessionId) ? null : SessionId,
-                    To: string.IsNullOrWhiteSpace(To) ? null : To,
-                    Properties: props,
-                    ScheduledEnqueueTime: UseScheduledTime
-                        ? DateTimeOffset.Now.Add(ScheduleDelay)
-                        : null);
-
-                for (var i = 0; i < SendCount; i++)
-                {
-                    await svc.SendAsync(Target.ActualDestinationPath, baseMsg);
-                    if (i < SendCount - 1)
-                        await Task.Delay(50); // brief pause between batch sends
-                }
-                Body = "";
-                Outcome = Target.SuccessDescription;
-            }
-            catch
-            {
-                Error = $"{Target.FailurePrefix}. The backend rejected the request.";
             }
             finally
             {
                 IsSending = false;
             }
         }, canSend);
+    }
+
+    private bool TryBuildDraft(out MessageDraft? draft, out string? error)
+    {
+        draft = null;
+        error = null;
+
+        var built = new MessageDraft
+        {
+            DestinationPath = Target.ActualDestinationPath,
+            ContentType = ContentType,
+            MessageId = MessageId,
+            CorrelationId = CorrelationId,
+            SessionId = SessionId,
+            To = To,
+            Subject = Subject,
+            ReplyTo = ReplyTo,
+            ReplyToSessionId = ReplyToSessionId,
+            PartitionKey = PartitionKey
+        };
+        built.SetBodyText(
+            Body,
+            string.Equals(ContentType, "application/json", StringComparison.OrdinalIgnoreCase)
+                ? MessageBodyKind.Json
+                : MessageBodyKind.Text);
+
+        if (UseScheduledTime)
+        {
+            try
+            {
+                built.ScheduleDelay = DurationValue.FromTimeSpan(ScheduleDelay);
+            }
+            catch (ArgumentException)
+            {
+                error = $"{Target.FailurePrefix}: Schedule delay must be a non-negative whole-millisecond duration.";
+                return false;
+            }
+        }
+
+        if (UseTimeToLive)
+        {
+            try
+            {
+                built.TimeToLive = DurationValue.FromTimeSpan(TimeToLive);
+            }
+            catch (ArgumentException)
+            {
+                error = $"{Target.FailurePrefix}: Time to live must be a non-negative whole-millisecond duration.";
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(PropertiesJson))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(PropertiesJson);
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    error = $"{Target.FailurePrefix}: Application properties must be a JSON object.";
+                    return false;
+                }
+
+                foreach (var property in document.RootElement.EnumerateObject())
+                {
+                    if (!TryMapJsonProperty(property, out var typed, out var mapError))
+                    {
+                        error = $"{Target.FailurePrefix}: {mapError}";
+                        return false;
+                    }
+
+                    built.CustomProperties.Add(typed!);
+                }
+            }
+            catch (JsonException)
+            {
+                error = $"{Target.FailurePrefix}: invalid JSON in Application Properties.";
+                return false;
+            }
+        }
+
+        draft = built;
+        return true;
+    }
+
+    private static bool TryMapJsonProperty(
+        JsonProperty property,
+        out TypedMessageProperty? typed,
+        out string? error)
+    {
+        typed = null;
+        error = null;
+
+        switch (property.Value.ValueKind)
+        {
+            case JsonValueKind.String:
+                typed = new TypedMessageProperty(property.Name, MessagePropertyType.String, property.Value.GetString());
+                return true;
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                typed = new TypedMessageProperty(property.Name, MessagePropertyType.Boolean, property.Value.GetBoolean());
+                return true;
+            case JsonValueKind.Number when property.Value.TryGetInt64(out var int64):
+                typed = new TypedMessageProperty(property.Name, MessagePropertyType.Int64, int64);
+                return true;
+            case JsonValueKind.Number:
+                typed = new TypedMessageProperty(property.Name, MessagePropertyType.Double, property.Value.GetDouble());
+                return true;
+            case JsonValueKind.Null:
+                typed = new TypedMessageProperty(property.Name, MessagePropertyType.String, null);
+                return true;
+            default:
+                error = $"Application property '{property.Name}' must be a string, number, boolean, or null.";
+                return false;
+        }
     }
 }

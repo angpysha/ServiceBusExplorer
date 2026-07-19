@@ -194,6 +194,7 @@ public class MessageBrowseTests
         var viewModel = new QueueDetailViewModel(
             new StubQueueService(),
             browse,
+            new StubMessageSendService(),
             new NoOpConfirmationService(),
             "orders");
 
@@ -215,6 +216,7 @@ public class MessageBrowseTests
         var viewModel = new QueueDetailViewModel(
             new StubQueueService(),
             browse,
+            new StubMessageSendService(),
             new NoOpConfirmationService(),
             "orders")
         {
@@ -288,6 +290,7 @@ public class MessageBrowseTests
         var viewModel = new QueueDetailViewModel(
             new StubQueueService(),
             browse,
+            new StubMessageSendService(),
             confirmation,
             "orders",
             text => { onCopy(text); return Task.CompletedTask; })
@@ -398,6 +401,16 @@ public class MessageBrowseTests
             ConfirmationRequest request,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(result);
+    }
+
+    private sealed class StubMessageSendService : IMessageSendService
+    {
+        public Task<MessageSendResult> SendAsync(
+            SendTargetContext target,
+            MessageDraft draft,
+            int sendCount = 1,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new MessageSendResult(MessageSendStatus.Succeeded, target.SuccessDescription));
     }
 
     private sealed class StubQueueService : IQueueService

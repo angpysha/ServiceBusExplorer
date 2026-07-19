@@ -110,6 +110,7 @@ public class TopicDetailViewModel : ReactiveObject
         ISubscriptionService subscriptionSvc,
         IQueueService queueSvc,
         IMessageBrowseService browseService,
+        IMessageSendService sendService,
         IConfirmationService confirmationService,
         string topicName)
     {
@@ -119,7 +120,7 @@ public class TopicDetailViewModel : ReactiveObject
         _topicName = topicName;
         Subscriptions = new SubscriptionListViewModel(subscriptionSvc, topicName);
         Send = new SendMessageViewModel(
-            queueSvc,
+            sendService,
             new SendTargetContext(SendTargetKind.Topic, topicName, topicName));
 
         NavigateBackCommand = ReactiveCommand.Create(() => _navigateBack.OnNext(Unit.Default));
@@ -134,6 +135,7 @@ public class TopicDetailViewModel : ReactiveObject
                         subscriptionSvc,
                         queueSvc,
                         _browseService,
+                        sendService,
                         _confirmationService,
                         topicName,
                         sub.Name);

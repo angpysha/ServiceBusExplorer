@@ -198,6 +198,7 @@ public class QueueDetailViewModel : ReactiveObject
     public QueueDetailViewModel(
         IQueueService svc,
         IMessageBrowseService browseService,
+        IMessageSendService sendService,
         IConfirmationService confirmationService,
         string queueName,
         Func<string, Task>? copyToClipboard = null)
@@ -215,7 +216,7 @@ public class QueueDetailViewModel : ReactiveObject
         Messages = receivedBound;
 
         Send = new SendMessageViewModel(
-            svc,
+            sendService,
             new SendTargetContext(SendTargetKind.Queue, queueName, queueName));
 
         NavigateBackCommand = ReactiveCommand.Create(() => _navigateBack.OnNext(Unit.Default));
@@ -318,7 +319,7 @@ public class QueueDetailViewModel : ReactiveObject
         });
 
         var hasSession = this.WhenAnyValue(x => x.IsReceiveMode);
-        var noSession  = this.WhenAnyValue(x => x.IsReceiveMode, m => !m);
+        var noSession = this.WhenAnyValue(x => x.IsReceiveMode, m => !m);
 
         StartReceiveCommand = ReactiveCommand.CreateFromTask(async () =>
         {

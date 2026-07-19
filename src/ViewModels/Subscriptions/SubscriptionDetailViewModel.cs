@@ -203,6 +203,7 @@ public class SubscriptionDetailViewModel : ReactiveObject
         ISubscriptionService subSvc,
         IQueueService queueSvc,
         IMessageBrowseService browseService,
+        IMessageSendService sendService,
         IConfirmationService confirmationService,
         string topicName,
         string subscriptionName,
@@ -225,7 +226,7 @@ public class SubscriptionDetailViewModel : ReactiveObject
 
         Rules = new RuleListViewModel(subSvc, topicName, subscriptionName);
         Send = new SendMessageViewModel(
-            queueSvc,
+            sendService,
             new SendTargetContext(
                 SendTargetKind.Subscription,
                 _entityPath,
@@ -331,7 +332,7 @@ public class SubscriptionDetailViewModel : ReactiveObject
         });
 
         var hasSession = this.WhenAnyValue(x => x.IsReceiveMode);
-        var noSession  = this.WhenAnyValue(x => x.IsReceiveMode, m => !m);
+        var noSession = this.WhenAnyValue(x => x.IsReceiveMode, m => !m);
 
         StartReceiveCommand = ReactiveCommand.CreateFromTask(async () =>
         {

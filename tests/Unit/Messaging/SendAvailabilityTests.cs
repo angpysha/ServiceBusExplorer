@@ -1,4 +1,6 @@
 using System.Reactive.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
+using ServiceBusExplorer.Services;
 using ServiceBusExplorer.ViewModels;
 using Xunit;
 
@@ -20,7 +22,7 @@ public class SendAvailabilityTests
     {
         var service = new RecordingQueueService();
         var target = new SendTargetContext(kind, requestedPath, actualDestination);
-        var viewModel = new SendMessageViewModel(service, target)
+        var viewModel = new SendMessageViewModel(CreateSendService(service), target)
         {
             Body = "draft"
         };
@@ -48,7 +50,7 @@ public class SendAvailabilityTests
             SendTargetKind.Subscription,
             "sales/Subscriptions/regional",
             "sales");
-        var viewModel = new SendMessageViewModel(service, target)
+        var viewModel = new SendMessageViewModel(CreateSendService(service), target)
         {
             Body = "keep this draft"
         };
@@ -65,7 +67,7 @@ public class SendAvailabilityTests
     {
         var service = new RecordingQueueService();
         var viewModel = new SendMessageViewModel(
-            service,
+            CreateSendService(service),
             new SendTargetContext(SendTargetKind.Queue, "orders", "orders"))
         {
             Body = "keep this draft",
@@ -84,7 +86,7 @@ public class SendAvailabilityTests
     {
         var service = new RecordingQueueService();
         var viewModel = new SendMessageViewModel(
-            service,
+            CreateSendService(service),
             new SendTargetContext(SendTargetKind.Queue, "orders", "orders"))
         {
             Body = "   ",
@@ -106,7 +108,7 @@ public class SendAvailabilityTests
     {
         var service = new RecordingQueueService();
         var viewModel = new SendMessageViewModel(
-            service,
+            CreateSendService(service),
             new SendTargetContext(SendTargetKind.Queue, "orders", "orders"))
         {
             Body = "scheduled draft",
@@ -129,7 +131,7 @@ public class SendAvailabilityTests
     {
         var service = new RecordingQueueService();
         var viewModel = new SendMessageViewModel(
-            service,
+            CreateSendService(service),
             new SendTargetContext(SendTargetKind.Queue, "orders", "orders"))
         {
             Body = "draft",
@@ -150,7 +152,7 @@ public class SendAvailabilityTests
     {
         var service = new RecordingQueueService();
         var viewModel = new SendMessageViewModel(
-            service,
+            CreateSendService(service),
             new SendTargetContext(SendTargetKind.Queue, "orders", "orders"))
         {
             Body = "scheduled draft",
@@ -164,6 +166,9 @@ public class SendAvailabilityTests
         Assert.Equal("scheduled draft", viewModel.Body);
         Assert.Contains("Schedule delay", viewModel.Error);
     }
+
+    private static MessageSendService CreateSendService(IQueueService queue) =>
+        new(queue, NullLogger<MessageSendService>.Instance);
 
     private sealed class RecordingQueueService : IQueueService
     {

@@ -181,13 +181,14 @@ public sealed class ScopedNavigationTests
 
         var eventHubSvc = new StubEventHubService();
         var eventHubDetail = new EventHubDetailViewModel(eventHubSvc);
-        var queues = new QueueListViewModel(namespaceSvc, queueSvc, browse, confirmation);
+        var queues = new QueueListViewModel(namespaceSvc, queueSvc, browse, new StubMessageSendService(), confirmation);
         var topics = new TopicListViewModel(
             namespaceSvc,
             topicSvc,
             new StubSubscriptionService(),
             queueSvc,
             browse,
+            new StubMessageSendService(),
             confirmation);
 
         var context = LiveConnectionContext.Create(
@@ -393,5 +394,15 @@ public sealed class ScopedNavigationTests
             PageRequest page,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new MessageBrowseResult([], null, SourceAvailability.Empty));
+    }
+
+    private sealed class StubMessageSendService : IMessageSendService
+    {
+        public Task<MessageSendResult> SendAsync(
+            SendTargetContext target,
+            MessageDraft draft,
+            int sendCount = 1,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new MessageSendResult(MessageSendStatus.Succeeded, target.SuccessDescription));
     }
 }

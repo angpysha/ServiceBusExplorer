@@ -31,7 +31,7 @@
                        FontWeight="SemiBold"
                        TextWrapping="Wrap" />
             <TextBlock Classes="field-help"
-                       Text="Not exposed in this internal composer: Subject/label, partition key, reply fields, absolute scheduled time, or message TTL." />
+                       Text="Compose body, routing, identity, scheduling, session, reply, content-type, TTL, and typed custom properties supported by the destination." />
           </StackPanel>
         </Border>
 
@@ -90,6 +90,16 @@
         </StackPanel>
 
         <StackPanel Spacing="3">
+          <TextBlock Text="Subject (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Application label/subject carried with the message for consumers and filters." />
+          <TextBox Text="{Binding Subject}"
+                   AutomationProperties.Name="Subject"
+                   AutomationProperties.HelpText="Optional. Application label/subject carried with the message for consumers and filters."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
           <TextBlock Text="To (optional)" FontWeight="SemiBold" />
           <TextBlock Classes="field-help"
                      Text="Optional logical destination metadata for consumers; it does not override the actual queue or topic shown above." />
@@ -100,16 +110,46 @@
         </StackPanel>
 
         <StackPanel Spacing="3">
+          <TextBlock Text="Reply To (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Address where replies should be sent; Azure Service Bus does not route automatically." />
+          <TextBox Text="{Binding ReplyTo}"
+                   AutomationProperties.Name="Reply To"
+                   AutomationProperties.HelpText="Optional. Address where replies should be sent; Azure Service Bus does not route automatically."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <TextBlock Text="Reply To Session ID (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Session identifier to set on reply messages for session-aware request/response." />
+          <TextBox Text="{Binding ReplyToSessionId}"
+                   AutomationProperties.Name="Reply To Session ID"
+                   AutomationProperties.HelpText="Optional. Session identifier to set on reply messages for session-aware request/response."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <TextBlock Text="Partition Key (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Routes related messages to the same partition when the destination is partitioned." />
+          <TextBox Text="{Binding PartitionKey}"
+                   AutomationProperties.Name="Partition Key"
+                   AutomationProperties.HelpText="Optional. Routes related messages to the same partition when the destination is partitioned."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
         <TextBlock Text="Application properties (optional JSON)" FontWeight="SemiBold" />
         <TextBlock Classes="field-help"
-                   Text="Optional. JSON object of custom key/value metadata included as Azure Service Bus application properties." />
+                   Text="Optional. JSON object of typed custom metadata (string, number, boolean, or null). Reserved broker property names are rejected." />
         <TextBox Text="{Binding PropertiesJson}"
                  AcceptsReturn="True"
                  MinHeight="60"
                  FontFamily="Cascadia Code,Consolas,monospace"
                  TextWrapping="Wrap"
                  AutomationProperties.Name="Application properties"
-                 AutomationProperties.HelpText="Optional. JSON object of custom key/value metadata included as Azure Service Bus application properties."
+                 AutomationProperties.HelpText="Optional. JSON object of typed custom metadata (string, number, boolean, or null). Reserved broker property names are rejected."
                  AutomationProperties.IsRequiredForForm="False" />
         </StackPanel>
 
@@ -149,6 +189,28 @@
                                AutomationProperties.Name="Schedule delay"
                                AutomationProperties.HelpText="Required when scheduling. Delay from now in D.HH:MM:SS[.fff] format; Azure Service Bus enqueues after this interval."
                                AutomationProperties.IsRequiredForForm="{Binding UseScheduledTime}" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <CheckBox Content="Set time to live (optional)"
+                    IsChecked="{Binding UseTimeToLive}"
+                    AutomationProperties.Name="Set time to live"
+                    AutomationProperties.HelpText="Optional. Enable to set message TTL with full millisecond precision and no product day cap."
+                    AutomationProperties.IsRequiredForForm="False" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Message time to live in D.HH:MM:SS[.fff]; uses full DurationValue precision without a product day cap." />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <TextBlock Text="Time to live * (when enabled)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Required when TTL is enabled. Whole-millisecond duration; no composer day cap is applied." />
+          <ctrl:DurationEditor Value="{Binding TimeToLive}"
+                               IsEnabled="{Binding UseTimeToLive}"
+                               Width="300"
+                               AutomationProperties.Name="Time to live"
+                               AutomationProperties.HelpText="Required when TTL is enabled. Whole-millisecond duration with full DurationValue precision."
+                               AutomationProperties.IsRequiredForForm="{Binding UseTimeToLive}" />
         </StackPanel>
       </StackPanel>
     </ScrollViewer>
