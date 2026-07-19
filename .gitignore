@@ -176,3 +176,7 @@ $RECYCLE.BIN/
 *.db
 .beads-credential-key
 _code_agent/
+
+# Service Bus emulator local secrets (keep .env.example only)
+tests/Integration/emulator/.env
+.env

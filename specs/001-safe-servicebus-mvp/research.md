@@ -184,16 +184,27 @@ misrepresenting reconnect readiness.
 ### R8. Testing Boundaries
 
 **Decision**: Add .NET 10 unit/contract/UI test projects using hand-written fakes for Core ports and
-Azure adapter seams. Keep live Azure tests opt-in, separately tagged, and configured only through
-environment identity and ephemeral resource names.
+Azure adapter seams. Add an **opt-in Docker Compose Azure Service Bus emulator** integration
+project as the primary cross-process acceptance layer (official MCR emulator + SQL Edge,
+repo-owned `tests/Integration/emulator/`). Keep **live Azure** tests optional, separately tagged,
+and used only for emulator gaps (Entra ID, real throttling/quota, true RBAC denial).
 
 **Rationale**: Azure SDK concrete clients are difficult to fake reliably. Application ports make
 routing, confirmation, cancellation, and partial outcomes deterministic without mocking SDK
-internals.
+internals. The emulator proves real AMQP/admin wiring without provisioning cloud namespaces, matching
+Phase 7's "no Azure resource provisioning" intent. Messaging uses `sb://localhost` with
+`UseDevelopmentEmulator=true`; administration appends port `5300`. Health gate:
+`http://localhost:5300/health`.
+
+**Risk note**: Microsoft documents that the emulator is not positioned as a drop-in for the
+community WinForms Service Bus Explorer product. This MVP targets `Azure.Messaging.ServiceBus` /
+administration clients; emulator integration must validate SDK compatibility explicitly and skip
+or quarantine scenarios the emulator does not support (document in the Integration README).
 
 **Alternatives considered**:
 - Mock SDK concrete clients: rejected as brittle.
 - Live-only tests: rejected as slow, permission-dependent, and unsuitable for every change.
+- Emulator-only forever: rejected for Entra/RBAC/throttle gaps that still need opt-in live Azure.
 
 ### R9. Preview Packaging and OS Floors
 
@@ -376,7 +387,7 @@ known limitations. No final RID/package/signing/native-vault claim is inferred.
 | OS floors | Windows 10 22H2, macOS 13, Ubuntu 22.04; revalidate at release |
 | Bounded retrieval | 100 items by default, cancellable, continuation/refresh visible |
 | Confirmation interaction | Typed async confirmation port; Avalonia modal implementation |
-| Test architecture | Fake-backed .NET 10 tests; live Azure tests isolated and opt-in |
+| Test architecture | Fake-backed .NET 10 tests; Docker Compose Service Bus emulator integration; live Azure opt-in for gaps only |
 | Optional SAS storage | Default-off native vault through async `ICredentialVault`; opaque reference only |
 | Vault failure | Typed outcome, preserve profile/reference, prompt for SAS, no file fallback |
 | Credential package | No selection; `ktsu.CredentialCache` 1.2.3 rejected; adapter spike required |

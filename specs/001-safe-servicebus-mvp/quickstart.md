@@ -60,7 +60,9 @@ dotnet test src/ --configuration Release
 ```
 
 After modern test projects exist, run their unit and contract suites on every platform. Run
-`LiveAzure` tests only when the explicit opt-in environment flag and isolated namespace are set.
+**Service Bus emulator integration** tests when Docker Compose is up and `SBE_INTEGRATION=1` is
+set (`tests/Integration/emulator/README.md`). Run `LiveAzure` tests only when `SBE_LIVE_AZURE=1`
+and an isolated namespace are set (emulator gaps only).
 
 Expected outcome:
 

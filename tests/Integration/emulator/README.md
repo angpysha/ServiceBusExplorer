@@ -1,0 +1,51 @@
+# Service Bus emulator (integration tests)
+
+Repo-owned Compose for Spec Kit tasks **T031–T033**. Design:
+[`docs/sdlc/design/service-bus-emulator-integration-tests.md`](../../../docs/sdlc/design/service-bus-emulator-integration-tests.md).
+
+## Prerequisites
+
+- Docker Desktop / Docker Engine with Compose v2
+- ~2 GB RAM free
+
+## Start
+
+```bash
+cd tests/Integration/emulator
+cp .env.example .env
+# Edit .env: ACCEPT_EULA=Y and a strong MSSQL_SA_PASSWORD
+docker compose up -d
+curl -sf http://localhost:5300/health
+```
+
+## Run tests (after T031 project exists)
+
+```bash
+SBE_INTEGRATION=1 dotnet test tests/Integration/ -c Release
+```
+
+Without `SBE_INTEGRATION=1`, Integration tests must skip (default local/CI unit jobs stay fast).
+
+## Connection strings
+
+Messaging:
+
+```text
+Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+```
+
+Administration (port 5300):
+
+```text
+Endpoint=sb://localhost:5300;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+```
+
+## Stop
+
+```bash
+docker compose down
+```
+
+## Entities
+
+See `Config.json`: `mvp.queue.active`, `mvp.queue.sessions`, `mvp.topic` / `mvp.subscription`.

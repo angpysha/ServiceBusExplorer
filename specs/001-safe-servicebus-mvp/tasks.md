@@ -168,13 +168,22 @@ checkpoint is not a beads task.
 
 ---
 
-## Phase 7: Cross-Story Acceptance and Release Evidence
+## Phase 7: Service Bus Emulator Integration and Release Evidence
 
-**Purpose**: Validate the assembled MVP without adding excluded services or provisioning Azure
-resources.
+**Purpose**: Validate assembled MVP against the **official Azure Service Bus emulator** via
+repo-owned Docker Compose (no cloud namespace provisioning). Optional live Azure covers only
+emulator gaps. Capture sanitized evidence for release review.
 
-- [ ] T031 Write opt-in, environment-identity live Azure acceptance fixtures for queue/topic/subscription/rule lifecycle, routing, sessions, deferred messages, recovery, permission denial, and throttling in `tests/LiveAzure/ServiceBusExplorer.LiveAzureTests.csproj`, `tests/LiveAzure/Fixtures/ServiceBusFixture.cs`, and `tests/LiveAzure/Scenarios/SafeServiceBusMvpTests.cs`
-- [ ] T032 Run and record sanitized modern unit/contract/UI/live/package/native-vault results and the `specs/001-safe-servicebus-mvp/quickstart.md` scenarios in `_code_agent/20260716-safe-servicebus-mvp/artifacts/sdlc/test-reports/TEST-ServiceBusExplorer-m7n-safe-servicebus-mvp.md` (evidence-only; production behavior is covered by T001–T031)
+**Independent Test**: With Docker available, `docker compose -f tests/Integration/emulator/docker-compose.yml up -d`,
+wait for `http://localhost:5300/health`, then
+`SBE_INTEGRATION=1 dotnet test tests/Integration/ -c Release`. Default CI unit/contract jobs must
+not require Docker; a dedicated workflow job may run the emulator suite.
+
+- [ ] T031 [P] Add the Docker Compose Service Bus emulator harness (SQL Edge + emulator, Config.json entities, `.env.example`, health wait helper) and the opt-in Integration test project/fixture using `UseDevelopmentEmulator=true` messaging (`sb://localhost`) and admin (`sb://localhost:5300`) connection strings in `tests/Integration/emulator/docker-compose.yml`, `tests/Integration/emulator/Config.json`, `tests/Integration/emulator/.env.example`, `tests/Integration/emulator/README.md`, `tests/Integration/ServiceBusExplorer.IntegrationTests.csproj`, `tests/Integration/Fixtures/ServiceBusEmulatorFixture.cs`, and `docs/sdlc/design/service-bus-emulator-integration-tests.md`
+- [ ] T032 [P] After R3, write failing-then-passing emulator integration scenarios for connect/browse, send, peek-lock receive/settlement, confirmed receive-and-delete, bounded purge outcomes, and queue/topic/subscription/rule lifecycle conflict/refresh against the Compose emulator in `tests/Integration/Scenarios/MessagingAdminEmulatorTests.cs` (requires T031; exercises T015–T022 services)
+- [ ] T033 After R4 (sessions/recovery), extend emulator integration for session ownership, deferred retrieval, and send-before-settle recovery partial outcomes in `tests/Integration/Scenarios/SessionsRecoveryEmulatorTests.cs` (requires T031 + T026)
+- [ ] T034 Write opt-in live Azure acceptance only for emulator gaps (Entra auth, real throttling/quota, RBAC permission denial) in `tests/LiveAzure/ServiceBusExplorer.LiveAzureTests.csproj`, `tests/LiveAzure/Fixtures/ServiceBusFixture.cs`, and `tests/LiveAzure/Scenarios/SafeServiceBusMvpGapTests.cs` (skipped unless `SBE_LIVE_AZURE=1`)
+- [ ] T035 Run and record sanitized modern unit/contract/UI/emulator/live/package/native-vault results and the `specs/001-safe-servicebus-mvp/quickstart.md` scenarios in `docs/sdlc/test-reports/TEST-ServiceBusExplorer-m7n-safe-servicebus-mvp.md` (evidence-only; production behavior is covered by T001–T034)
 
 ---
 
@@ -207,10 +216,19 @@ flowchart TD
   T022 --> R3
   R3 --> T023
   R3 --> T024
+  R3 --> T031
   T023 --> T025
   T024 --> T025 --> T026 --> R4[Sessions/recovery review]
+  T031 --> T032
+  R3 --> T032
+  R4 --> T033
+  T031 --> T033
+  T026 --> T033
   R4 --> T027 --> T028 --> T029 --> T030 --> R5[Packaging review]
-  R5 --> T031 --> T032
+  R5 --> T034
+  T032 --> T035
+  T033 --> T035
+  T034 --> T035
 ```
 
 ### Parallel opportunities
@@ -225,6 +243,8 @@ flowchart TD
   disjoint; T022 integrates their presentation after both finish.
 - T023 and T024 may run together because session and deferred service files are disjoint; both
   finish before T025.
+- **T031 may start immediately after R3** (Compose harness) in parallel with T023/T024; **T032**
+  messaging/admin emulator scenarios may run in parallel with sessions once T031 is green.
 - T001–T006 are intentionally serial because adjacent internal slices share current composition,
   Core duration contracts, detail views, or test-project files; no internal executable is shared
   before the review after T006.
@@ -242,9 +262,10 @@ flowchart TD
    adapters and broader connection integration, and review connection safety.
 4. Complete richer messaging and administration without moving the T003 availability repair into
    the later send task.
-5. Add sessions/recovery only after settlement and outcome models are stable.
-6. Add general accessibility and packaging, then run opt-in live acceptance and capture sanitized
-   evidence.
+5. After R3, stand up the **Service Bus emulator Docker Compose** harness (T031) and run
+   messaging/admin integration scenarios (T032) while sessions/recovery continue.
+6. After R4, extend emulator coverage for sessions/recovery (T033), then accessibility/packaging.
+7. Optionally run live Azure gap tests (T034), then capture sanitized evidence (T035).
 
 ## Scope Guardrails
 
@@ -256,3 +277,5 @@ flowchart TD
   production architecture or move legacy WinForms code.
 - No task authorizes committing credentials, tokens, connection strings, message contents, or raw
   Azure exception payloads.
+- Emulator `.env` must stay gitignored; only `.env.example` (no real passwords) is committed.
+  Integration tests must never log SAS keys, message bodies, or raw service payloads.

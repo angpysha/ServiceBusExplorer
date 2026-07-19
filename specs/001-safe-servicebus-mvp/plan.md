@@ -32,9 +32,12 @@ profile metadata, with no credential reference and SAS re-entered for every conn
 an optional opaque random credential reference may address SAS held only in Windows Credential
 Manager, macOS Keychain Services, or Linux Secret Service/libsecret
 
-**Testing**: New .NET 10 xUnit test project(s) with hand-written fakes around application ports;
-Avalonia UI/layout/accessibility tests at 820 device-independent pixels and 100/150/200% scaling;
-separate opt-in live Azure acceptance tests
+**Testing**: New .NET 10 xUnit/contract/UI test projects with hand-written fakes around application
+ports; Avalonia UI/layout/accessibility tests at 820 device-independent pixels and 100/150/200%
+scaling; **Docker Compose Azure Service Bus emulator** integration tests as the primary
+cross-process acceptance layer (AMQP 5672 + admin HTTP 5300, SQL Edge dependency); optional
+opt-in live Azure acceptance only for emulator gaps (Entra, throttling, true multi-tenant permission
+denial)
 
 **Target Platform**: Windows 10 22H2+ x64, macOS 13+ x64/arm64, Ubuntu 22.04+ x64 preview
 artifacts; floors must be reviewed against the .NET 10/Avalonia support matrix before release
@@ -68,7 +71,7 @@ single-entity scope, queues/topics/subscriptions/rules, and bounded message batc
 | I. Avalonia is the product UI | PASS | All new behavior targets `src/App`; WinForms is retained, not extended into new architecture. |
 | II. Preserve layer boundaries | PASS | Core owns models/ports, ViewModels own presentation state, Services own Azure adapters, App owns dialogs/composition/persistence. |
 | III. Secure modern Azure integration | PASS | Profiles exclude secrets; optional SAS storage is native-vault-only and Entra tokens are excluded. |
-| IV. Tests define completion | PASS | Four first-internal evidence groups gate sharing; later vault lifecycle, unit, contract, live Azure, and package smoke layers remain defined. |
+| IV. Tests define completion | PASS | Four first-internal evidence groups gate sharing; later vault lifecycle, unit, contract, emulator integration, optional live Azure, and package smoke layers remain defined. |
 | V. Async, observable, resilient | PASS | All ports accept cancellation; typed outcomes distinguish cancellation, stale state, partial success, and failure. |
 | Technical/security constraints | PASS | .NET 10/Avalonia 11/ReactiveUI retained; no unsupported package is required. |
 | Workflow/governance | PASS | Existing code was inspected through the project codesearch index and alternatives/migration impact are recorded. |
@@ -196,16 +199,29 @@ src/
 ├── ServiceBusExplorer/   # Legacy WinForms application retained during preview
 └── ServiceBusExplorer.Tests/ # Existing legacy net472 tests
 
-tests/                    # Planned modern net10 test projects
-├── Unit/
-├── Contract/
-├── UI/
-└── LiveAzure/
+tests/                    # Modern net10 test projects
+├── Unit/                 # Fake-backed Core/ViewModel tests
+├── Contract/             # Fake-backed application-port contracts
+├── UI/                   # Avalonia interaction/accessibility
+├── PlatformVault/        # OS-gated native vault smoke
+├── Integration/          # Service Bus emulator (Docker Compose) acceptance
+│   └── emulator/         # docker-compose.yml, Config.json, .env.example
+└── LiveAzure/            # Optional opt-in real-namespace acceptance (emulator gaps only)
 ```
 
 **Structure Decision**: extend the current Core/ViewModels/Services/App split. Do not introduce a
 parallel architecture or move legacy code. New modern tests are separated from the net472 legacy
 suite so .NET 10 contracts and Avalonia behavior can run cross-platform.
+
+### Emulator integration (primary acceptance)
+
+Repo-owned Compose under `tests/Integration/emulator/` runs
+`mcr.microsoft.com/azure-messaging/servicebus-emulator` plus SQL Edge. Tests wait on
+`http://localhost:5300/health`, connect with
+`UseDevelopmentEmulator=true` (messaging `sb://localhost`, administration `sb://localhost:5300`),
+and exercise application services against predeclared entities in `Config.json`. Suites are
+opt-in via `SBE_INTEGRATION=1` (or CI job with Docker) so default `dotnet test` remains
+fake-backed and fast. Live Azure remains secondary for behaviors the emulator cannot prove.
 
 ## Delivery Slices
 
@@ -231,7 +247,9 @@ suite so .NET 10 contracts and Avalonia behavior can run cross-platform.
    receive/settlement, typed outcomes, and stale-state handling.
 8. **Sessions and selected recovery**: ownership state, deferred lookup, send-before-settle
    recovery, diagnostic property treatment, and per-item outcomes.
-9. **Final accessibility and preview packaging**: complete P1-wide accessibility, self-contained
+9. **Service Bus emulator integration**: Docker Compose harness plus messaging/admin (and later
+   sessions/recovery) scenarios against the official emulator; optional live Azure only for gaps.
+10. **Final accessibility and preview packaging**: complete P1-wide accessibility, self-contained
    RID artifacts, native-vault package smoke, signing-status evidence, and public preview guidance.
 
 Each slice ends at a human review checkpoint. Existing `tasks.md` is intentionally untouched in
@@ -246,7 +264,7 @@ implementation.
 | New UI behavior is Avalonia with business behavior outside views | PASS |
 | Azure SDK, identity, and optional native-vault choices are secret-safe | PASS |
 | Async/cancellation, retry boundaries, bounded retrieval, and diagnostics are explicit | PASS |
-| Safety, vault lifecycle, contract, accessibility, live Azure, and package verification trace to acceptance criteria | PASS |
+| Safety, vault lifecycle, contract, accessibility, emulator integration, optional live Azure, and package verification trace to acceptance criteria | PASS |
 | Core duration semantics remain framework-neutral and App owns Avalonia interaction/layout | PASS |
 | Legacy Popup/PInvoke reuse is prohibited and Send DataTemplate repair remains separate | PASS |
 | First internal distribution is blocked on secret-free history with no credential reference | PASS |
