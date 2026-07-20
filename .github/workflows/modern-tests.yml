@@ -1,0 +1,106 @@
+# Isolated CI for the modern Avalonia / net10.0 app.
+# Intentionally does NOT restore the full legacy net472 solution under src/.
+name: modern-tests
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - feature/avalonia-servicebus-mvp
+  pull_request:
+    branches:
+      - main
+      - master
+      - feature/avalonia-servicebus-mvp
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # Integration suite is opt-in; leave unset so tests skip without Docker.
+  # SBE_INTEGRATION: "1"
+
+jobs:
+  build-modern:
+    name: Build and test modern (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore App
+        run: dotnet restore src/App/App.csproj
+
+      - name: Build App (Release)
+        run: dotnet build src/App/App.csproj -c Release --no-restore
+
+      - name: Restore Unit tests
+        run: dotnet restore tests/Unit/ServiceBusExplorer.UnitTests.csproj
+
+      - name: Test Unit (Release)
+        run: >-
+          dotnet test tests/Unit/ServiceBusExplorer.UnitTests.csproj
+          -c Release
+          --no-restore
+          --nologo
+          --logger "trx;LogFileName=unit.trx"
+          --results-directory "${{ runner.temp }}/test-results"
+
+      - name: Restore Contract tests
+        run: dotnet restore tests/Contract/ServiceBusExplorer.ContractTests.csproj
+
+      - name: Test Contract (Release)
+        run: >-
+          dotnet test tests/Contract/ServiceBusExplorer.ContractTests.csproj
+          -c Release
+          --no-restore
+          --nologo
+          --logger "trx;LogFileName=contract.trx"
+          --results-directory "${{ runner.temp }}/test-results"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-test-results
+          path: ${{ runner.temp }}/test-results
+          if-no-files-found: ignore
+
+  ui-modern:
+    name: UI headless tests (ubuntu, non-blocking)
+    runs-on: ubuntu-latest
+    # Headless Avalonia suite; keep non-blocking until fully green on Linux CI.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore UI tests
+        run: dotnet restore tests/UI/ServiceBusExplorer.UITests.csproj
+
+      - name: Test UI (Release)
+        run: >-
+          dotnet test tests/UI/ServiceBusExplorer.UITests.csproj
+          -c Release
+          --nologo
+          --logger "trx;LogFileName=ui.trx"
+          --results-directory "${{ runner.temp }}/test-results"
+
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-ui-test-results
+          path: ${{ runner.temp }}/test-results
+          if-no-files-found: ignore
