@@ -180,3 +180,15 @@ _code_agent/
 # Service Bus emulator local secrets (keep .env.example only)
 tests/Integration/emulator/.env
 .env
+.env.*
+!.env.example
+!**/.env.example
+
+# Local connection profiles / user settings (never commit)
+**/.config/sbexplorer/
+**/sbexplorer/settings.json
+**/connection-profiles.json
+**/profiles.local.json
+**/launchSettings.json
+secrets.json
+**/credentials.json
