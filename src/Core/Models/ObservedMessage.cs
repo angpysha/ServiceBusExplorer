@@ -43,6 +43,16 @@ public sealed record MessageBodyRepresentation(
     string? ContentType = null);
 
 /// <summary>
+/// Prerequisites for requesting deferred retrieval by sequence number.
+/// </summary>
+public enum DeferredRetrievalEligibility
+{
+    Eligible,
+    Unauthorized,
+    UnsupportedSource
+}
+
+/// <summary>
 /// A non-destructively observed Service Bus message with explicit source tagging.
 /// </summary>
 public sealed record ObservedMessage(
@@ -63,10 +73,32 @@ public sealed record ObservedMessage(
     string? LockToken = null)
 {
     /// <summary>
-    /// True when the message is currently eligible for settlement at <paramref name="utcNow"/>.
-    /// Peeked, expired, lost, and terminal messages are never settleable.
+    /// Evaluates whether deferred retrieval may be attempted for <paramref name="source"/>
+    /// under the current <paramref name="capabilities"/>.
     /// </summary>
-    public bool IsSettleableAt(DateTimeOffset utcNow)
+    public static DeferredRetrievalEligibility CheckRetrievalPrerequisites(
+        CapabilitySet capabilities,
+        MessageSource source)
+    {
+        ArgumentNullException.ThrowIfNull(capabilities);
+
+        if (!capabilities.CanRetrieveDeferredAndRecover)
+        {
+            return DeferredRetrievalEligibility.Unauthorized;
+        }
+
+        if (source != MessageSource.Active)
+        {
+            return DeferredRetrievalEligibility.UnsupportedSource;
+        }
+
+        return DeferredRetrievalEligibility.Eligible;
+    }
+
+    /// <summary>
+    /// Settlement state after applying lock-expiry rules at <paramref name="utcNow"/>.
+    /// </summary>
+    public SettlementState SettlementStateAt(DateTimeOffset utcNow)
     {
         var effective = SettlementState;
         if (ReceiveKind == MessageReceiveKind.Peeked || SettlementState == SettlementState.Peeked)
@@ -74,9 +106,15 @@ public sealed record ObservedMessage(
             effective = SettlementState.Peeked;
         }
 
-        effective = SettlementStateMachine.RefreshForClock(effective, LockedUntil, utcNow);
-        return SettlementStateMachine.CanSettle(effective);
+        return SettlementStateMachine.RefreshForClock(effective, LockedUntil, utcNow);
     }
+
+    /// <summary>
+    /// True when the message is currently eligible for settlement at <paramref name="utcNow"/>.
+    /// Peeked, expired, lost, and terminal messages are never settleable.
+    /// </summary>
+    public bool IsSettleableAt(DateTimeOffset utcNow) =>
+        SettlementStateMachine.CanSettle(SettlementStateAt(utcNow));
 }
 
 /// <summary>
