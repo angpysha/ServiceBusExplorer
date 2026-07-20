@@ -398,6 +398,7 @@ public sealed class ServiceBusSubscriptionAdministrationAdapter : ISubscriptionA
             UserMetadata: string.IsNullOrEmpty(p.UserMetadata) ? null : p.UserMetadata,
             EnableDeadLetteringOnMessageExpiration: p.DeadLetteringOnMessageExpiration,
             EnableDeadLetteringOnFilterEvaluationExceptions: p.EnableDeadLetteringOnFilterEvaluationExceptions,
+            RequiresSession: p.RequiresSession,
             ServiceVersion: version ?? string.Empty);
 
     private static string? ExtractVersion<T>(Response<T> response)

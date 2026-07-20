@@ -18,6 +18,7 @@ public record SubscriptionInfo(
     string? UserMetadata = null,
     bool EnableDeadLetteringOnMessageExpiration = false,
     bool EnableDeadLetteringOnFilterEvaluationExceptions = true,
+    bool RequiresSession = false,
     // Opaque last-observed service version/etag for optimistic concurrency.
     string ServiceVersion = "");
 

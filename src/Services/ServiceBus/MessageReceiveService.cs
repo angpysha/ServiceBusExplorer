@@ -23,7 +23,7 @@ public sealed class MessageReceiveService : IMessageReceiveService
         _log = log;
     }
 
-    public Task<IReceiveSession> OpenPeekLockAsync(
+    public async Task<IReceiveSession> OpenPeekLockAsync(
         EntityAddress address,
         MessageSource source,
         SessionRequest? sessionRequest = null,
@@ -32,21 +32,21 @@ public sealed class MessageReceiveService : IMessageReceiveService
         ArgumentNullException.ThrowIfNull(address);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (sessionRequest is not null)
-        {
-            throw new InvalidOperationException(
-                "Session-aware peek-lock receive is not enabled yet. Pass sessionRequest: null.");
-        }
-
         var subQueue = MessageSourceMapper.Map(source);
-        var session = _receiveAdapter.OpenPeekLock(address.Path, subQueue, source);
+        var session = await _receiveAdapter.OpenPeekLockAsync(
+            address.Path,
+            subQueue,
+            source,
+            sessionRequest,
+            cancellationToken);
 
         _log.LogInformation(
-            "Opened peek-lock session on {EntityPath} source {Source}",
+            "Opened peek-lock session on {EntityPath} source {Source} session {SessionMode}",
             address.Path,
-            source);
+            source,
+            sessionRequest?.SessionId ?? (sessionRequest is null ? "none" : "next"));
 
-        return Task.FromResult(session);
+        return session;
     }
 
     public async Task<ReceiveAndDeleteResult> ReceiveAndDeleteAsync(

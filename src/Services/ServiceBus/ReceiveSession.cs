@@ -12,11 +12,12 @@ namespace ServiceBusExplorer.Services;
 internal sealed class ReceiveSession : IReceiveSession
 {
     private readonly ServiceBusReceiver _receiver;
-    // Map lock-token → original SDK message, needed for settlement calls
+    private readonly ServiceBusSessionReceiver? _sessionReceiver;
     private readonly Dictionary<string, ServiceBusReceivedMessage> _pending = new();
     private readonly SettlementTracker _tracker = new();
     private readonly CancellationTokenSource _abortCts = new();
     private int _disposed;
+    private int _sessionLockLost;
 
     internal ReceiveSession(
         ServiceBusReceiver receiver,
@@ -24,6 +25,7 @@ internal sealed class ReceiveSession : IReceiveSession
         MessageSource source)
     {
         _receiver = receiver;
+        _sessionReceiver = receiver as ServiceBusSessionReceiver;
         EntityPath = entityPath;
         Source = source;
     }
@@ -41,6 +43,14 @@ internal sealed class ReceiveSession : IReceiveSession
 
     public MessageSource Source { get; }
 
+    public string? SessionId => _sessionReceiver?.SessionId;
+
+    public DateTimeOffset? SessionLockedUntil => _sessionReceiver?.SessionLockedUntil;
+
+    public bool IsSessionReceiver => _sessionReceiver is not null;
+
+    public bool IsSessionLockLost => Volatile.Read(ref _sessionLockLost) != 0;
+
     public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
     public CancellationToken SessionAborted =>
@@ -52,15 +62,24 @@ internal sealed class ReceiveSession : IReceiveSession
         ThrowIfDisposed();
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _abortCts.Token);
         var timeout = maxWait ?? TimeSpan.FromSeconds(3);
-        var msgs = await _receiver.ReceiveMessagesAsync(maxMessages, timeout, linked.Token);
-        var result = new List<ReceivedMessage>(msgs.Count);
-        foreach (var m in msgs)
+        try
         {
-            _pending[m.LockToken] = m;
-            _tracker.Register(m.LockToken, m.LockedUntil);
-            result.Add(MapMessage(m));
+            var msgs = await _receiver.ReceiveMessagesAsync(maxMessages, timeout, linked.Token);
+            var result = new List<ReceivedMessage>(msgs.Count);
+            foreach (var m in msgs)
+            {
+                _pending[m.LockToken] = m;
+                _tracker.Register(m.LockToken, m.LockedUntil);
+                result.Add(MapMessage(m));
+            }
+
+            return result;
         }
-        return result;
+        catch (ServiceBusException ex) when (IsSessionLockFailure(ex))
+        {
+            MarkSessionLockLost();
+            throw;
+        }
     }
 
     public SettlementState GetSettlementState(ReceivedMessage message, DateTimeOffset? utcNow = null)
@@ -90,6 +109,27 @@ internal sealed class ReceiveSession : IReceiveSession
         SettleAsync(message, SettlementAction.Defer, ct,
             (sdk, token) => _receiver.DeferMessageAsync(sdk, cancellationToken: token));
 
+    public async Task<bool> TryRenewSessionLockAsync(CancellationToken ct = default)
+    {
+        if (_sessionReceiver is null || IsSessionLockLost)
+        {
+            return false;
+        }
+
+        ThrowIfDisposed();
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _abortCts.Token);
+            await _sessionReceiver.RenewSessionLockAsync(linked.Token);
+            return true;
+        }
+        catch (ServiceBusException ex) when (IsSessionLockFailure(ex))
+        {
+            MarkSessionLockLost();
+            return false;
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
@@ -117,6 +157,14 @@ internal sealed class ReceiveSession : IReceiveSession
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(message);
 
+        if (IsSessionLockLost)
+        {
+            return _tracker.MarkFailed(
+                message,
+                action,
+                "Session lock was lost. Further message actions are disabled.");
+        }
+
         var rejection = _tracker.TryBegin(message, action, DateTimeOffset.UtcNow);
         if (rejection is not null)
             return rejection;
@@ -141,11 +189,24 @@ internal sealed class ReceiveSession : IReceiveSession
             _pending.Remove(message.LockToken);
             return _tracker.MarkLockLost(message, action);
         }
+        catch (ServiceBusException ex) when (IsSessionLockFailure(ex))
+        {
+            MarkSessionLockLost();
+            return _tracker.MarkFailed(
+                message,
+                action,
+                "Session lock was lost. Further message actions are disabled.");
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return _tracker.MarkFailed(message, action, "Settlement failed: " + ex.Message);
         }
     }
+
+    private void MarkSessionLockLost() => Interlocked.Exchange(ref _sessionLockLost, 1);
+
+    private static bool IsSessionLockFailure(ServiceBusException ex) =>
+        ex.Reason == ServiceBusFailureReason.SessionLockLost;
 
     private void ThrowIfDisposed()
     {

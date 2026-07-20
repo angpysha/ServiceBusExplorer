@@ -3,11 +3,9 @@ namespace ServiceBusExplorer;
 
 /// <summary>
 /// Optional Service Bus session acquisition request for peek-lock receive.
-/// Non-null requests are reserved for session-aware receive (T023).
 /// </summary>
 /// <param name="SessionId">
-/// Specific session id to acquire, or <c>null</c> to request the next available session
-/// when session-aware receive is enabled.
+/// Specific session id to acquire, or <c>null</c> to request the next available session.
 /// </param>
 public sealed record SessionRequest(string? SessionId = null);
 

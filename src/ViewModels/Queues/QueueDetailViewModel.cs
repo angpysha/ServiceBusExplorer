@@ -29,6 +29,8 @@ public class QueueDetailViewModel : ReactiveObject
     private bool _showSendPanel;
     private bool _isReceiveMode;
     private IReceiveSession? _activeSession;
+    private SessionContext? _sessionContext;
+    private string? _requestedSessionId;
     private SourceAvailability _browseAvailability = SourceAvailability.Empty;
     private BrowseContinuation? _browseContinuation;
     private bool _userAcceptedSensitiveCopy;
@@ -119,7 +121,46 @@ public class QueueDetailViewModel : ReactiveObject
     public bool CanSettleSelectedMessage =>
         _activeSession is not null
         && SelectedMessage is not null
+        && CanOperateSessionMessages
         && SettlementStateMachine.CanSettle(_activeSession.GetSettlementState(SelectedMessage));
+
+    /// <summary>True when session ownership allows receive/settle work.</summary>
+    public bool CanOperateSessionMessages =>
+        SessionContext is null || SessionContext.CanOperateMessages(DateTimeOffset.UtcNow);
+
+    /// <summary>True for session-enabled queues.</summary>
+    public bool RequiresSessionEntity => Queue?.RequiresSession ?? false;
+
+    /// <summary>Current session ownership state for session-enabled receive.</summary>
+    public SessionContext? SessionContext
+    {
+        get => _sessionContext;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _sessionContext, value);
+            this.RaisePropertyChanged(nameof(SessionStatus));
+            this.RaisePropertyChanged(nameof(IsSessionLockVisible));
+            this.RaisePropertyChanged(nameof(CanOperateSessionMessages));
+            this.RaisePropertyChanged(nameof(CanReacquireSession));
+            this.RaisePropertyChanged(nameof(CanSettleSelectedMessage));
+        }
+    }
+
+    /// <summary>Operator-entered session id for specific acquisition.</summary>
+    public string? RequestedSessionId
+    {
+        get => _requestedSessionId;
+        set => this.RaiseAndSetIfChanged(ref _requestedSessionId, value);
+    }
+
+    /// <summary>Operator-safe session ownership status.</summary>
+    public string? SessionStatus => SessionContext?.StatusMessage;
+
+    /// <summary>True when accepted session lock expiry is visible.</summary>
+    public bool IsSessionLockVisible => SessionContext?.IsLockVisible ?? false;
+
+    /// <summary>True after session loss, release, or fault.</summary>
+    public bool CanReacquireSession => SessionContext?.CanReacquire ?? false;
 
     /// <summary>
     /// Peeked browse messages are never settleable.
@@ -260,6 +301,9 @@ public class QueueDetailViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
     public ReactiveCommand<Unit, Unit> StartReceiveCommand { get; }
     public ReactiveCommand<Unit, Unit> StopReceiveCommand { get; }
+    public ReactiveCommand<Unit, Unit> AcceptNextSessionCommand { get; }
+    public ReactiveCommand<Unit, Unit> AcceptSpecificSessionCommand { get; }
+    public ReactiveCommand<Unit, Unit> ReacquireSessionCommand { get; }
     public ReactiveCommand<Unit, Unit> ReceiveBatchCommand { get; }
     public ReactiveCommand<Unit, Unit> ReceiveAndDeleteCommand { get; }
     public ReactiveCommand<Unit, Unit> CopyObservedBodyCommand { get; }
@@ -454,9 +498,16 @@ public class QueueDetailViewModel : ReactiveObject
                     return;
                 }
 
+                if (RequiresSessionEntity)
+                {
+                    Error = "Use Accept next session or Accept specific session for session-enabled queues.";
+                    return;
+                }
+
                 _activeSession = await _receiveService.OpenPeekLockAsync(
                     new EntityAddress(_queueName),
                     source);
+                SessionContext = null;
                 _receivedSource.Clear();
                 IsReceiveMode = true;
             }
@@ -470,6 +521,25 @@ public class QueueDetailViewModel : ReactiveObject
             }
         }, noSession);
 
+        AcceptNextSessionCommand = ReactiveCommand.CreateFromTask(
+            () => AcquireSessionAsync(new SessionRequest()),
+            noSession);
+
+        AcceptSpecificSessionCommand = ReactiveCommand.CreateFromTask(
+            () => AcquireSessionAsync(new SessionRequest(RequestedSessionId)),
+            this.WhenAnyValue(
+                x => x.IsReceiveMode,
+                x => x.RequestedSessionId,
+                (receiveMode, sessionId) => !receiveMode && !string.IsNullOrWhiteSpace(sessionId)));
+
+        ReacquireSessionCommand = ReactiveCommand.CreateFromTask(
+            () => AcquireSessionAsync(
+                new SessionRequest(
+                    string.IsNullOrWhiteSpace(RequestedSessionId)
+                        ? SessionContext?.RequestedSessionId
+                        : RequestedSessionId)),
+            this.WhenAnyValue(x => x.CanReacquireSession));
+
         StopReceiveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (_activeSession != null)
@@ -477,21 +547,36 @@ public class QueueDetailViewModel : ReactiveObject
                 await _activeSession.DisposeAsync();
                 _activeSession = null;
             }
+
+            if (SessionContext is not null)
+            {
+                SessionContext = SessionContext.MarkReleased();
+            }
+
             IsReceiveMode = false;
         }, hasSession);
 
         ReceiveBatchCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (_activeSession == null) return;
+            if (!CanOperateSessionMessages)
+            {
+                SyncSessionContext();
+                Error = SessionContext?.StatusMessage ?? "Session is not ready for message operations.";
+                return;
+            }
+
             IsLoading = true;
             Error = null;
             try
             {
                 var msgs = await _activeSession.ReceiveBatchAsync(PeekCount);
                 _receivedSource.AddRange(msgs);
+                SyncSessionContext();
             }
             catch (Exception ex)
             {
+                SyncSessionContext();
                 Error = ex.Message;
             }
             finally
@@ -556,11 +641,66 @@ public class QueueDetailViewModel : ReactiveObject
         RefreshInfoCommand.Execute().Subscribe();
     }
 
+    private async Task AcquireSessionAsync(SessionRequest request)
+    {
+        if (SelectedSource is not { } source)
+        {
+            Error = "Select a message source before accepting a session.";
+            return;
+        }
+
+        IsLoading = true;
+        Error = null;
+        var context = SessionContext.BeginAcquisition(new EntityAddress(_queueName), source, request);
+        SessionContext = context;
+        try
+        {
+            _activeSession = await _receiveService.OpenPeekLockAsync(
+                new EntityAddress(_queueName),
+                source,
+                request);
+            SessionContext = context.SyncFromReceiveSession(_activeSession, DateTimeOffset.UtcNow);
+            _receivedSource.Clear();
+            IsReceiveMode = true;
+        }
+        catch (OperationCanceledException)
+        {
+            SessionContext = context.MarkCancelled();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            SessionContext = context.MarkFaulted(ex.Message);
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void SyncSessionContext()
+    {
+        if (_activeSession is null || SessionContext is null)
+        {
+            return;
+        }
+
+        SessionContext = SessionContext.SyncFromReceiveSession(_activeSession, DateTimeOffset.UtcNow);
+    }
+
     private async Task SettleReceivedAsync(ReceivedMessage msg, SettlementAction action)
     {
         if (_activeSession is null)
         {
             SettlementStatus = "No active peek-lock session.";
+            return;
+        }
+
+        if (!CanOperateSessionMessages)
+        {
+            SyncSessionContext();
+            SettlementStatus = SessionContext?.StatusMessage ?? "Session is not ready for message operations.";
             return;
         }
 
@@ -596,10 +736,12 @@ public class QueueDetailViewModel : ReactiveObject
                 _receivedSource.Remove(msg);
             }
 
+            SyncSessionContext();
             this.RaisePropertyChanged(nameof(CanSettleSelectedMessage));
         }
         catch (Exception ex)
         {
+            SyncSessionContext();
             Error = ex.Message;
             SettlementStatus = ex.Message;
         }

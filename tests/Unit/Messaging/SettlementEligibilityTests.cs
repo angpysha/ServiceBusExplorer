@@ -212,7 +212,12 @@ public sealed class SettlementEligibilityTests
 
     private sealed class UnusedReceiveAdapter : Services.IServiceBusReceiveAdapter
     {
-        public IReceiveSession OpenPeekLock(string entityPath, Azure.Messaging.ServiceBus.SubQueue subQueue, MessageSource source) =>
+        public Task<IReceiveSession> OpenPeekLockAsync(
+            string entityPath,
+            Azure.Messaging.ServiceBus.SubQueue subQueue,
+            MessageSource source,
+            SessionRequest? sessionRequest = null,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<Azure.Messaging.ServiceBus.ServiceBusReceivedMessage>> ReceiveAndDeleteAsync(
@@ -220,6 +225,13 @@ public sealed class SettlementEligibilityTests
             Azure.Messaging.ServiceBus.SubQueue subQueue,
             int maxMessages,
             TimeSpan maxWait,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Azure.Messaging.ServiceBus.ServiceBusReceivedMessage> ReceiveDeferredMessageAsync(
+            string entityPath,
+            Azure.Messaging.ServiceBus.SubQueue subQueue,
+            long sequenceNumber,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
     }
@@ -230,6 +242,10 @@ public sealed class SettlementEligibilityTests
 
         public string EntityPath => "orders";
         public MessageSource Source => MessageSource.Active;
+        public string? SessionId => null;
+        public DateTimeOffset? SessionLockedUntil => null;
+        public bool IsSessionReceiver => false;
+        public bool IsSessionLockLost => false;
         public bool IsDisposed => false;
         public CancellationToken SessionAborted => CancellationToken.None;
 
@@ -255,6 +271,9 @@ public sealed class SettlementEligibilityTests
 
         public Task<SettlementItemOutcome> DeferAsync(ReceivedMessage message, CancellationToken ct = default) =>
             Settle(message, SettlementAction.Defer);
+
+        public Task<bool> TryRenewSessionLockAsync(CancellationToken ct = default) =>
+            Task.FromResult(false);
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 

@@ -14,6 +14,18 @@ public interface IReceiveSession : IAsyncDisposable
     /// <summary>Explicit message source this session was opened against.</summary>
     MessageSource Source { get; }
 
+    /// <summary>Accepted session id when this is a session receiver; otherwise null.</summary>
+    string? SessionId { get; }
+
+    /// <summary>Current session lock expiry when <see cref="IsSessionReceiver"/> is true.</summary>
+    DateTimeOffset? SessionLockedUntil { get; }
+
+    /// <summary>True when opened against a session-enabled entity.</summary>
+    bool IsSessionReceiver { get; }
+
+    /// <summary>True after the broker reports session lock loss.</summary>
+    bool IsSessionLockLost { get; }
+
     /// <summary>True after <see cref="IAsyncDisposable.DisposeAsync"/> has completed.</summary>
     bool IsDisposed { get; }
 
@@ -44,4 +56,9 @@ public interface IReceiveSession : IAsyncDisposable
 
     /// <summary>Defer a message — it must be received explicitly by sequence number.</summary>
     Task<SettlementItemOutcome> DeferAsync(ReceivedMessage message, CancellationToken ct = default);
+
+    /// <summary>
+    /// Renews the session lock when supported. Returns false when not a session receiver or lock is lost.
+    /// </summary>
+    Task<bool> TryRenewSessionLockAsync(CancellationToken ct = default);
 }

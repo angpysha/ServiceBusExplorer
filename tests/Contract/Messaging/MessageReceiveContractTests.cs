@@ -32,17 +32,52 @@ public sealed class MessageReceiveContractTests
     }
 
     [Fact]
-    public async Task OpenPeekLockAsync_RejectsNonNullSessionRequestUntilSessionSupportExists()
+    public async Task OpenPeekLockAsync_WithNextSessionRequest_AcceptsSessionReceiver()
     {
-        var service = CreateService(new RecordingReceiveAdapter());
+        var adapter = new RecordingReceiveAdapter();
+        var service = CreateService(adapter);
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.OpenPeekLockAsync(
-                new EntityAddress("orders"),
-                MessageSource.Active,
-                new SessionRequest("s1")));
+        var session = await service.OpenPeekLockAsync(
+            new EntityAddress("orders"),
+            MessageSource.Active,
+            new SessionRequest());
 
-        Assert.Contains("Session-aware", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(session.IsSessionReceiver);
+        Assert.Equal("next-session", session.SessionId);
+        Assert.NotNull(session.SessionLockedUntil);
+        Assert.Equal(1, adapter.PeekLockOpenCount);
+        Assert.True(adapter.LastSessionRequestWasNext);
+    }
+
+    [Fact]
+    public async Task OpenPeekLockAsync_WithSpecificSessionRequest_PassesSessionId()
+    {
+        var adapter = new RecordingReceiveAdapter();
+        var service = CreateService(adapter);
+
+        var session = await service.OpenPeekLockAsync(
+            new EntityAddress("orders"),
+            MessageSource.Active,
+            new SessionRequest("session-a"));
+
+        Assert.Equal("session-a", session.SessionId);
+        Assert.Equal("session-a", adapter.LastRequestedSessionId);
+        Assert.False(adapter.LastSessionRequestWasNext);
+    }
+
+    [Fact]
+    public async Task OpenPeekLockAsync_WithoutSessionRequest_UsesNonSessionReceiver()
+    {
+        var adapter = new RecordingReceiveAdapter();
+        var service = CreateService(adapter);
+
+        var session = await service.OpenPeekLockAsync(
+            new EntityAddress("orders"),
+            MessageSource.Active);
+
+        Assert.False(session.IsSessionReceiver);
+        Assert.Null(session.SessionId);
+        Assert.Null(adapter.LastRequestedSessionId);
     }
 
     [Fact]
@@ -192,15 +227,32 @@ public sealed class MessageReceiveContractTests
         public SubQueue LastPeekLockSubQueue { get; private set; }
         public SubQueue LastReceiveAndDeleteSubQueue { get; private set; }
         public string? LastReceiveAndDeletePath { get; private set; }
+        public string? LastRequestedSessionId { get; private set; }
+        public bool LastSessionRequestWasNext { get; private set; }
 
-        public IReceiveSession OpenPeekLock(
+        public Task<IReceiveSession> OpenPeekLockAsync(
             string entityPath,
             SubQueue subQueue,
-            MessageSource source)
+            MessageSource source,
+            SessionRequest? sessionRequest = null,
+            CancellationToken cancellationToken = default)
         {
             PeekLockOpenCount++;
             LastPeekLockSubQueue = subQueue;
-            return new FakeReceiveSession(entityPath, source);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (sessionRequest is null)
+            {
+                LastRequestedSessionId = null;
+                LastSessionRequestWasNext = false;
+                return Task.FromResult<IReceiveSession>(new FakeReceiveSession(entityPath, source));
+            }
+
+            LastRequestedSessionId = sessionRequest.SessionId;
+            LastSessionRequestWasNext = sessionRequest.SessionId is null;
+            var sessionId = sessionRequest.SessionId ?? "next-session";
+            return Task.FromResult<IReceiveSession>(
+                new FakeReceiveSession(entityPath, source, sessionId, DateTimeOffset.UtcNow.AddMinutes(1)));
         }
 
         public Task<IReadOnlyList<ServiceBusReceivedMessage>> ReceiveAndDeleteAsync(
@@ -218,6 +270,13 @@ public sealed class MessageReceiveContractTests
                 cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(ReceiveAndDeleteMessages);
         }
+
+        public Task<ServiceBusReceivedMessage> ReceiveDeferredMessageAsync(
+            string entityPath,
+            SubQueue subQueue,
+            long sequenceNumber,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeReceiveSession : IReceiveSession
@@ -226,13 +285,28 @@ public sealed class MessageReceiveContractTests
         private int _disposed;
 
         public FakeReceiveSession(string entityPath, MessageSource source)
+            : this(entityPath, source, sessionId: null, sessionLockedUntil: null)
+        {
+        }
+
+        public FakeReceiveSession(
+            string entityPath,
+            MessageSource source,
+            string? sessionId,
+            DateTimeOffset? sessionLockedUntil)
         {
             EntityPath = entityPath;
             Source = source;
+            SessionId = sessionId;
+            SessionLockedUntil = sessionLockedUntil;
         }
 
         public string EntityPath { get; }
         public MessageSource Source { get; }
+        public string? SessionId { get; }
+        public DateTimeOffset? SessionLockedUntil { get; }
+        public bool IsSessionReceiver => SessionId is not null;
+        public bool IsSessionLockLost { get; private set; }
         public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
         public CancellationToken SessionAborted =>
             IsDisposed ? new CancellationToken(canceled: true) : _abortCts.Token;
@@ -257,6 +331,9 @@ public sealed class MessageReceiveContractTests
 
         public Task<SettlementItemOutcome> DeferAsync(ReceivedMessage message, CancellationToken ct = default) =>
             Task.FromResult(Succeeded(message, SettlementAction.Defer));
+
+        public Task<bool> TryRenewSessionLockAsync(CancellationToken ct = default) =>
+            Task.FromResult(IsSessionReceiver && !IsSessionLockLost);
 
         public SettlementState GetSettlementState(ReceivedMessage message, DateTimeOffset? utcNow = null) =>
             SettlementState.Locked;

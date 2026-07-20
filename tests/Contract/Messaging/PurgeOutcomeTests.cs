@@ -222,11 +222,13 @@ public sealed class PurgeOutcomeTests
         public string? LastPath { get; private set; }
         public List<int> RequestedMaxMessages { get; } = [];
 
-        public IReceiveSession OpenPeekLock(
+        public Task<IReceiveSession> OpenPeekLockAsync(
             string entityPath,
             SubQueue subQueue,
-            MessageSource source) =>
-            throw new NotSupportedException();
+            MessageSource source,
+            SessionRequest? sessionRequest = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<IReceiveSession>(new NotSupportedException());
 
         public Task<IReadOnlyList<ServiceBusReceivedMessage>> ReceiveAndDeleteAsync(
             string entityPath,
@@ -250,5 +252,12 @@ public sealed class PurgeOutcomeTests
             AfterBatch?.Invoke(CallCount);
             return Task.FromResult(batch);
         }
+
+        public Task<ServiceBusReceivedMessage> ReceiveDeferredMessageAsync(
+            string entityPath,
+            SubQueue subQueue,
+            long sequenceNumber,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 }
