@@ -122,9 +122,9 @@ rule behavior.
 invariants, destructive confirmations, failure semantics, and authoritative refresh. This
 checkpoint is not a beads task.
 
-**Status (2026-07-19)**: US2 messaging (T015–T019) reviewed and approved by Andrii Petrovskyi.
-Phase 4 / US3 (T020–T022) implemented with contract/unit evidence. Awaiting final R3 sign-off
-before Phase 5 / US4 (sessions/recovery, T023+).
+**Status (2026-07-20)**: R3 approved by Andrii Petrovskyi. US2 (T015–T019) and US3 (T020–T022)
+complete with unit/contract evidence. Phase 5 / US4 (T023+) and Phase 7 integration (T031+)
+authorized.
 
 ---
 
@@ -137,8 +137,8 @@ send-before-settle ordering and retry-safe partial outcomes.
 loss disables work, deferred sequence lookup, explicit recovery destination/property treatment,
 replacement send precedes original settlement, and successful items are not retried.
 
-- [ ] T023 [P] [US4] Write failing session ownership state-machine tests first, then implement next/specific session acquisition, visible lock state, cancellation, loss handling, and reacquisition in `tests/Unit/Messaging/SessionContextTests.cs`, `src/Core/Models/SessionContext.cs`, `src/Core/Contracts/IMessageReceiveService.cs`, `src/Services/ServiceBus/MessageReceiveService.cs`, `src/Services/ServiceBus/ReceiveSession.cs`, `src/ViewModels/Queues/QueueDetailViewModel.cs`, and `src/ViewModels/Subscriptions/SubscriptionDetailViewModel.cs`
-- [ ] T024 [P] [US4] Write failing deferred retrieval contract tests first, then implement explicit-source sequence-number lookup with current lock/authorization eligibility in `tests/Contract/Messaging/DeferredMessageTests.cs`, `src/Core/Contracts/IDeferredMessageService.cs`, `src/Services/ServiceBus/DeferredMessageService.cs`, and `src/Core/Models/ObservedMessage.cs`
+- [x] T023 [P] [US4] Write failing session ownership state-machine tests first, then implement next/specific session acquisition, visible lock state, cancellation, loss handling, and reacquisition in `tests/Unit/Messaging/SessionContextTests.cs`, `src/Core/Models/SessionContext.cs`, `src/Core/Contracts/IMessageReceiveService.cs`, `src/Services/ServiceBus/MessageReceiveService.cs`, `src/Services/ServiceBus/ReceiveSession.cs`, `src/ViewModels/Queues/QueueDetailViewModel.cs`, and `src/ViewModels/Subscriptions/SubscriptionDetailViewModel.cs`
+- [x] T024 [P] [US4] Write failing deferred retrieval contract tests first, then implement explicit-source sequence-number lookup with current lock/authorization eligibility in `tests/Contract/Messaging/DeferredMessageTests.cs`, `src/Core/Contracts/IDeferredMessageService.cs`, `src/Services/ServiceBus/DeferredMessageService.cs`, and `src/Core/Models/ObservedMessage.cs`
 - [ ] T025 [US4] Write failing recovery ordering and partial-failure tests first, then implement selected-message recovery with explicit destination, diagnostic-property treatment, send-before-settle, per-item outcomes, and retry requests excluding confirmed successes in `tests/Unit/Messaging/RecoveryOrchestratorTests.cs`, `src/Core/Models/RecoveryOperation.cs`, `src/Core/Contracts/IRecoveryService.cs`, and `src/Services/ServiceBus/RecoveryService.cs`
 - [ ] T026 [US4] Write failing recovery confirmation and state presentation tests first, then expose selected dead-letter/deferred recovery, destination/property choices, cancellation, progress, and per-item retry-safe results in `tests/Unit/ViewModels/RecoveryViewModelTests.cs`, `src/ViewModels/Messaging/RecoveryViewModel.cs`, `src/App/Views/Messaging/RecoveryView.axaml`, `src/App/Views/Messaging/RecoveryView.axaml.cs`, `src/App/Views/Queues/QueueDetailView.axaml`, and `src/App/Views/Subscriptions/SubscriptionDetailView.axaml`
 
@@ -179,7 +179,7 @@ wait for `http://localhost:5300/health`, then
 `SBE_INTEGRATION=1 dotnet test tests/Integration/ -c Release`. Default CI unit/contract jobs must
 not require Docker; a dedicated workflow job may run the emulator suite.
 
-- [ ] T031 [P] Add the Docker Compose Service Bus emulator harness (SQL Edge + emulator, Config.json entities, `.env.example`, health wait helper) and the opt-in Integration test project/fixture using `UseDevelopmentEmulator=true` messaging (`sb://localhost`) and admin (`sb://localhost:5300`) connection strings in `tests/Integration/emulator/docker-compose.yml`, `tests/Integration/emulator/Config.json`, `tests/Integration/emulator/.env.example`, `tests/Integration/emulator/README.md`, `tests/Integration/ServiceBusExplorer.IntegrationTests.csproj`, `tests/Integration/Fixtures/ServiceBusEmulatorFixture.cs`, and `docs/sdlc/design/service-bus-emulator-integration-tests.md`
+- [x] T031 [P] Add the Docker Compose Service Bus emulator harness (SQL Edge + emulator, Config.json entities, `.env.example`, health wait helper) and the opt-in Integration test project/fixture using `UseDevelopmentEmulator=true` messaging (`sb://localhost`) and admin (`sb://localhost:5300`) connection strings in `tests/Integration/emulator/docker-compose.yml`, `tests/Integration/emulator/Config.json`, `tests/Integration/emulator/.env.example`, `tests/Integration/emulator/README.md`, `tests/Integration/ServiceBusExplorer.IntegrationTests.csproj`, `tests/Integration/Fixtures/ServiceBusEmulatorFixture.cs`, and `docs/sdlc/design/service-bus-emulator-integration-tests.md`
 - [ ] T032 [P] After R3, write failing-then-passing emulator integration scenarios for connect/browse, send, peek-lock receive/settlement, confirmed receive-and-delete, bounded purge outcomes, and queue/topic/subscription/rule lifecycle conflict/refresh against the Compose emulator in `tests/Integration/Scenarios/MessagingAdminEmulatorTests.cs` (requires T031; exercises T015–T022 services)
 - [ ] T033 After R4 (sessions/recovery), extend emulator integration for session ownership, deferred retrieval, and send-before-settle recovery partial outcomes in `tests/Integration/Scenarios/SessionsRecoveryEmulatorTests.cs` (requires T031 + T026)
 - [ ] T034 Write opt-in live Azure acceptance only for emulator gaps (Entra auth, real throttling/quota, RBAC permission denial) in `tests/LiveAzure/ServiceBusExplorer.LiveAzureTests.csproj`, `tests/LiveAzure/Fixtures/ServiceBusFixture.cs`, and `tests/LiveAzure/Scenarios/SafeServiceBusMvpGapTests.cs` (skipped unless `SBE_LIVE_AZURE=1`)

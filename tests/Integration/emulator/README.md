@@ -18,9 +18,22 @@ docker compose up -d
 curl -sf http://localhost:5300/health
 ```
 
-## Run tests (after T031 project exists)
+## Run tests (T031)
+
+From repo root (PowerShell 7+):
+
+```powershell
+pwsh ./scripts/run-integration-tests.ps1
+```
+
+Or manually:
 
 ```bash
+cd tests/Integration/emulator
+cp .env.example .env
+# Edit .env: ACCEPT_EULA=Y and a strong MSSQL_SA_PASSWORD
+docker compose up -d
+curl -sf http://localhost:5300/health
 SBE_INTEGRATION=1 dotnet test tests/Integration/ -c Release
 ```
 
