@@ -85,9 +85,12 @@
         <TextBlock Grid.Column="5" Text="" Padding="8,6" />
       </Grid>
 
+      <!-- Tag carries DeleteCommand so item templates avoid xmlns-prefixed DataContext casts
+           (deferred DataTemplate build cannot resolve those types at runtime). -->
       <ListBox Grid.Row="1"
                ItemsSource="{Binding Queues}"
                SelectedItem="{Binding SelectedQueue}"
+               Tag="{Binding DeleteCommand}"
                Margin="16,0"
                Background="Transparent"
                BorderThickness="0">
@@ -106,7 +109,7 @@
                          VerticalAlignment="Center" HorizontalAlignment="Center"
                          Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
               <Button Grid.Column="5" Content="Delete"
-                      Command="{Binding $parent[ListBox].((vm:QueueListViewModel)DataContext).DeleteCommand}"
+                      Command="{Binding $parent[ListBox].Tag}"
                       CommandParameter="{Binding Name}"
                       Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
                       Padding="8,2"

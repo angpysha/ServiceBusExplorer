@@ -85,9 +85,11 @@
     </Border>
 
     <!-- Rules list -->
+    <!-- Tag carries DeleteCommand — avoids xmlns-prefixed DataContext casts in deferred item templates. -->
     <ListBox Grid.Row="4"
              ItemsSource="{Binding Rules}"
              SelectedItem="{Binding SelectedRule}"
+             Tag="{Binding DeleteCommand}"
              Background="Transparent"
              BorderThickness="0">
       <ListBox.ItemTemplate>
@@ -102,7 +104,7 @@
                        FontSize="11"
                        Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
             <Button Grid.Column="3" Content="Delete"
-                    Command="{Binding $parent[ListBox].((vm:RuleListViewModel)DataContext).DeleteCommand}"
+                    Command="{Binding $parent[ListBox].Tag}"
                     CommandParameter="{Binding Name}"
                     Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
                     Padding="8,2" />
