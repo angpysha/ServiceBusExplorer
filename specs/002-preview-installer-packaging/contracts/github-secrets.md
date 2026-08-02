@@ -14,7 +14,10 @@
 | `APP_STORE_CONNECT_ISSUER_ID` | ASC Issuer ID |
 | `APP_STORE_CONNECT_API_KEY_P8_BASE64` | Base64 of the `.p8` private key |
 
-Fastlane receives API key via ephemeral JSON or env mapped into `api_key` / `api_key_path` ([notarize action](https://docs.fastlane.tools/actions/notarize/)).
+Fastlane is **not** required. CI uses `xcrun notarytool` with the `.p8` + key id + issuer
+exported by `scripts/ci/import-apple-signing.sh` (`APP_STORE_CONNECT_API_KEY_P8_PATH`,
+`APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`). An ASC API key JSON file is
+also written for compatibility.
 
 ## Optional / local-only (not required for CI notarize)
 

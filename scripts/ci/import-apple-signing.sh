@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Import Developer ID .p12 + prepare ephemeral App Store Connect API key for fastlane.
+# Import Developer ID .p12 + prepare ephemeral App Store Connect API key for notarytool.
 # Expects env:
 #   MACOS_CERTIFICATE_BASE64  base64-encoded .p12
 #   MACOS_CERTIFICATE_PWD     .p12 password
 #   KEYCHAIN_PASSWORD         password for the temporary keychain
-# For fastlane notarize (preferred CI):
+# For notarytool notarize (CI primary):
 #   APP_STORE_CONNECT_API_KEY_ID
 #   APP_STORE_CONNECT_ISSUER_ID
 #   APP_STORE_CONNECT_API_KEY_P8_BASE64
@@ -51,15 +51,14 @@ if [[ -n "${GITHUB_ENV:-}" ]]; then
 fi
 export SIGNING_IDENTITY="$IDENTITY"
 
-# Ephemeral ASC API key material for fastlane (no secrets echoed).
+# Ephemeral ASC API key material for notarytool (no secrets echoed).
 if [[ -n "${APP_STORE_CONNECT_API_KEY_ID:-}" && -n "${APP_STORE_CONNECT_ISSUER_ID:-}" && -n "${APP_STORE_CONNECT_API_KEY_P8_BASE64:-}" ]]; then
   mkdir -p "$ASC_DIR"
   chmod 700 "$ASC_DIR"
   echo "$APP_STORE_CONNECT_API_KEY_P8_BASE64" | base64 --decode >"$P8_PATH"
   chmod 600 "$P8_PATH"
 
-  # fastlane API key JSON file format:
-  # https://docs.fastlane.tools/app-store-connect-api/#using-fastlane-api-key-json-file
+  # Keep JSON alongside .p8 for tools that expect the ASC API key file format.
   python3 - <<PY
 import json, os
 path = os.environ.get("API_KEY_JSON", "$API_KEY_JSON")
@@ -72,19 +71,23 @@ payload = {
 with open(path, "w", encoding="utf-8") as f:
     json.dump(payload, f)
 os.chmod(path, 0o600)
-print(f"Wrote ASC API key JSON for fastlane (path redacted).")
+print("Wrote ASC API key material for notarytool (paths redacted).")
 PY
 
   if [[ -n "${GITHUB_ENV:-}" ]]; then
     echo "APP_STORE_CONNECT_API_KEY_PATH=$API_KEY_JSON" >>"$GITHUB_ENV"
+    echo "APP_STORE_CONNECT_API_KEY_P8_PATH=$P8_PATH" >>"$GITHUB_ENV"
+    echo "APP_STORE_CONNECT_API_KEY_ID=$APP_STORE_CONNECT_API_KEY_ID" >>"$GITHUB_ENV"
+    echo "APP_STORE_CONNECT_ISSUER_ID=$APP_STORE_CONNECT_ISSUER_ID" >>"$GITHUB_ENV"
   fi
   export APP_STORE_CONNECT_API_KEY_PATH="$API_KEY_JSON"
-  echo "Prepared App Store Connect API key for fastlane notarize"
+  export APP_STORE_CONNECT_API_KEY_P8_PATH="$P8_PATH"
+  echo "Prepared App Store Connect API key for notarytool notarize"
 elif [[ "${NOTARIZE:-0}" == "1" || "${REQUIRE_ASC_API_KEY:-0}" == "1" ]]; then
   echo "ASC API key secrets required for notarize (APP_STORE_CONNECT_API_KEY_ID, APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_API_KEY_P8_BASE64)." >&2
   exit 1
 else
-  echo "ASC API key secrets not provided; fastlane notarize will fail if NOTARIZE=1."
+  echo "ASC API key secrets not provided; notarytool notarize will fail if NOTARIZE=1."
 fi
 
 # Optional laptop fallback only — not the CI primary path.

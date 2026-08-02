@@ -1,47 +1,39 @@
 # frozen_string_literal: true
 
+# Optional local helper. CI notarization uses scripts/package-macos-internal.sh
+# (xcrun notarytool + stapler) — not the flaky fastlane `notarize` action.
+
 default_platform(:mac)
 
 platform :mac do
-  desc "Notarize and staple a signed macOS DMG (ASC API key). Fail-closed on error."
+  desc "Notarize and staple a signed macOS DMG via notarytool (ASC API key). Fail-closed on error."
   lane :macos_notarize_dmg do |options|
     dmg_path = options[:dmg_path] || ENV["DMG_PATH"]
-    bundle_id = options[:bundle_id] || ENV["BUNDLE_ID"] || "com.servicebusexplorer.internal"
-    api_key_path = options[:api_key_path] || ENV["APP_STORE_CONNECT_API_KEY_PATH"]
-
     UI.user_error!("dmg_path is required") if dmg_path.to_s.empty?
     UI.user_error!("DMG not found: #{dmg_path}") unless File.exist?(dmg_path)
 
-    api_key = nil
-    if api_key_path.to_s.empty?
-      key_id = ENV["APP_STORE_CONNECT_API_KEY_ID"] || ENV["ASC_KEY_ID"]
-      issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"] || ENV["ASC_ISSUER_ID"]
-      key_content = ENV["APP_STORE_CONNECT_API_KEY_CONTENT"]
-      if key_id.to_s.empty? || issuer_id.to_s.empty? || key_content.to_s.empty?
-        UI.user_error!(
-          "ASC API key missing: set APP_STORE_CONNECT_API_KEY_PATH or " \
-          "APP_STORE_CONNECT_API_KEY_ID + APP_STORE_CONNECT_ISSUER_ID + APP_STORE_CONNECT_API_KEY_CONTENT"
-        )
-      end
-      api_key = {
-        key_id: key_id,
-        issuer_id: issuer_id,
-        key: key_content,
-        is_key_content_base64: ENV.fetch("APP_STORE_CONNECT_API_KEY_IS_BASE64", "false") == "true",
-        duration: 1200,
-        in_house: false
-      }
+    key_path = ENV["APP_STORE_CONNECT_API_KEY_P8_PATH"].to_s
+    key_id = ENV["APP_STORE_CONNECT_API_KEY_ID"].to_s
+    issuer = ENV["APP_STORE_CONNECT_ISSUER_ID"].to_s
+    if key_path.empty? || key_id.empty? || issuer.empty? || !File.exist?(key_path)
+      UI.user_error!(
+        "ASC API key missing: set APP_STORE_CONNECT_API_KEY_P8_PATH + " \
+        "APP_STORE_CONNECT_API_KEY_ID + APP_STORE_CONNECT_ISSUER_ID " \
+        "(run scripts/ci/import-apple-signing.sh). Prefer NOTARIZE=1 on package-macos-internal.sh for CI."
+      )
     end
 
-    notarize(
-      package: dmg_path,
-      bundle_id: bundle_id,
-      api_key_path: api_key_path.to_s.empty? ? nil : api_key_path,
-      api_key: api_key,
-      print_log: true,
-      verbose: true
+    # Direct Apple tooling — avoids fastlane notarize JSON parse crashes on Accepted.
+    sh(
+      "xcrun", "notarytool", "submit", dmg_path,
+      "--key", key_path,
+      "--key-id", key_id,
+      "--issuer", issuer,
+      "--wait",
+      "--output-format", "json"
     )
-
-    UI.success("Notarized and stapled: #{dmg_path}")
+    sh("xcrun", "stapler", "staple", dmg_path)
+    sh("xcrun", "stapler", "validate", dmg_path)
+    UI.success("Notarized and stapled via notarytool: #{dmg_path}")
   end
 end
