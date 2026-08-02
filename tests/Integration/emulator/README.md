@@ -53,6 +53,9 @@ Administration (port 5300):
 Endpoint=sb://localhost:5300;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
 ```
 
+Requires **Azure.Messaging.ServiceBus ≥ 7.20** so the administration client honors the `:5300` port
+(older 7.19 builds connect to `:80` and fail).
+
 ## Stop
 
 ```bash

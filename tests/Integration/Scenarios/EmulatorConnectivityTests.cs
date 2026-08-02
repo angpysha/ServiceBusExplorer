@@ -41,10 +41,28 @@ public sealed class EmulatorConnectivityTests(ServiceBusEmulatorFixture fixture)
         var body = $"integration-smoke-{Guid.NewGuid():N}";
         await sender.SendMessageAsync(new Azure.Messaging.ServiceBus.ServiceBusMessage(body));
 
-        var received = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(30));
+        // Drain leftover messages from prior runs; match on the body we just sent.
+        Azure.Messaging.ServiceBus.ServiceBusReceivedMessage? received = null;
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var next = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(5));
+            if (next is null)
+            {
+                continue;
+            }
+
+            if (next.Body.ToString() == body)
+            {
+                received = next;
+                break;
+            }
+
+            await receiver.CompleteMessageAsync(next);
+        }
+
         Assert.NotNull(received);
         Assert.Equal(body, received.Body.ToString());
-
         await receiver.CompleteMessageAsync(received);
     }
 }

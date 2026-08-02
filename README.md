@@ -35,38 +35,54 @@ It is strongly recommended to set `Configuration File for Settings and Connectio
 >
 > Do not overwite the new configuration file with the old file since the `runtime` section in the new must file not be modified. 
 
-## First internal macOS build
+## Preview installers (Avalonia / .NET 10)
 
-The Avalonia first-internal build is a development/test-only artifact for macOS 13 or later. It
-has incomplete feature parity, requires SAS re-entry for every connection, and is separate from
-the final cross-platform preview packaging gate.
+Evaluator-facing packages for the modern Avalonia app:
 
-On a macOS host, create the native-architecture DMG with:
+| OS | Primary artifact | Notes |
+|----|------------------|-------|
+| Windows x64 | **Unsigned MSI** (`scripts/package-windows-msi.ps1`) | Dual per-user / per-machine; SmartScreen “Unknown publisher” is expected |
+| macOS **Apple Silicon only** | **Notarized DMG** (`scripts/package-macos-internal.sh` + fastlane) | `osx-arm64` only; Intel deferred |
+| Linux x64 | `tar.gz` (`scripts/publish-preview.ps1 -Rids linux-x64`) | See Secret Service notes in docs |
 
-```bash
-./scripts/package-macos-internal.sh
+Full steps, VM install/uninstall checklist, Gatekeeper, and secrets tables:
+[`docs/preview-installation.md`](docs/preview-installation.md).  
+Maintainer CI runbook (workflow trigger, jobs, Environment `macos-notarize`, secret names):
+[`packaging/README.md`](packaging/README.md).
+
+### Windows MSI (unsigned)
+
+```powershell
+pwsh ./scripts/package-windows-msi.ps1   # Windows host + WiX v4+
 ```
 
-The script publishes a self-contained app, uses an existing Developer ID Application identity
-when one is already available, verifies the bundle and mounted image, performs a bounded launch
-smoke test, and writes the DMG plus SHA-256 sidecar under `artifacts/macos-internal/`. It does not
-perform notarization.
+Preview MSIs are **not** Authenticode-signed. Windows may show SmartScreen / unknown-publisher
+warnings — expected for this feature.
 
-To install, open the DMG and drag **Service Bus Explorer** to **Applications**. Check Gatekeeper
-status before launch:
+### macOS DMG (Apple Silicon + fastlane notarize)
 
 ```bash
-spctl --assess --type execute --verbose=4 "/Applications/Service Bus Explorer.app"
-open "/Applications/Service Bus Explorer.app"
+RID=osx-arm64 ./scripts/package-macos-internal.sh
+# With Developer ID + ASC API key (CI via scripts/ci/import-apple-signing.sh):
+NOTARIZE=1 RID=osx-arm64 ./scripts/package-macos-internal.sh
 ```
 
-An unnotarized internal build may be blocked even when its code signature is valid. After verifying
-the DMG checksum and source, use Finder's **Open** context-menu action. If macOS still blocks the
-known internal artifact, remove quarantine explicitly and open it again:
+Pipeline order: **sign → DMG → fastlane notarize** (fail-closed if secrets missing).
+No Mac App Store provisioning profile.
 
-```bash
-xattr -dr com.apple.quarantine "/Applications/Service Bus Explorer.app"
-open "/Applications/Service Bus Explorer.app"
+### GitHub Actions
+
+Workflow: [`.github/workflows/preview-packages.yml`](.github/workflows/preview-packages.yml)
+
+- Manual: **Actions → preview-packages → Run workflow**
+- Required macOS notarize secrets (names only): see
+  [`specs/002-preview-installer-packaging/contracts/github-secrets.md`](specs/002-preview-installer-packaging/contracts/github-secrets.md)
+  (`MACOS_CERTIFICATE_*`, `KEYCHAIN_PASSWORD`, `APP_STORE_CONNECT_API_KEY_*`)
+
+Linux archive only:
+
+```powershell
+pwsh ./scripts/publish-preview.ps1 -Rids linux-x64
 ```
 
 ## Using [Chocolatey](https://chocolatey.org/install)

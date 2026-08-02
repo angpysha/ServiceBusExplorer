@@ -20,11 +20,13 @@ services:
       - "${CONFIG_PATH}:/ServiceBus_Emulator/ConfigFiles/Config.json"
     ports:
       - "5672:5672"
-      - "5300:5300"
+      # Admin / health HTTP API (MS docs: EMULATOR_HTTP_PORT, default 5300)
+      - "5300:${EMULATOR_HTTP_PORT:-5300}"
     environment:
       SQL_SERVER: sqledge
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
       ACCEPT_EULA: ${ACCEPT_EULA}
+      EMULATOR_HTTP_PORT: ${EMULATOR_HTTP_PORT:-5300}
       SQL_WAIT_INTERVAL: ${SQL_WAIT_INTERVAL:-15}
     depends_on:
       - sqledge
