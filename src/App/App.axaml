@@ -14,6 +14,14 @@
              x:Class="ServiceBusExplorer.App.App">
   <Application.Styles>
     <FluentTheme />
+    <Style Selector="NumericUpDown">
+      <Setter Property="MinWidth" Value="144" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="ShowButtonSpinner" Value="True" />
+      <Setter Property="AllowSpin" Value="True" />
+      <Setter Property="FormatString" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
   </Application.Styles>
 
   <Application.Resources>
@@ -29,6 +37,9 @@
     <DataTemplate DataType="{x:Type local:AppMainViewModel}">
       <mainView:MainContentView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:MainViewModel}">
+      <mainView:MainView />
+    </DataTemplate>
     <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
       <dash:DashboardView />
     </DataTemplate>
@@ -39,6 +50,9 @@
     </DataTemplate>
     <DataTemplate DataType="{x:Type vm:QueueDetailViewModel}">
       <queues:QueueDetailView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SendMessageViewModel}">
+      <queues:SendMessageView />
     </DataTemplate>
 
     <!-- Topics -->

@@ -1,0 +1,50 @@
+# Azure Service Bus emulator — local integration tests
+# Docs: https://learn.microsoft.com/en-us/azure/service-bus-messaging/test-locally-with-service-bus-emulator
+# Design: docs/sdlc/design/service-bus-emulator-integration-tests.md
+#
+# Usage:
+#   cp .env.example .env   # set ACCEPT_EULA=Y and a strong MSSQL_SA_PASSWORD
+#   docker compose up -d
+#   curl -sf http://localhost:5300/health
+#   SBE_INTEGRATION=1 dotnet test tests/Integration/ -c Release
+#   docker compose down
+
+name: sbe-integration-emulator
+
+services:
+  emulator:
+    container_name: sbe-servicebus-emulator
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    pull_policy: always
+    volumes:
+      - "${CONFIG_PATH}:/ServiceBus_Emulator/ConfigFiles/Config.json"
+    ports:
+      - "5672:5672"
+      # Admin / health HTTP API (MS docs: EMULATOR_HTTP_PORT, default 5300)
+      - "5300:${EMULATOR_HTTP_PORT:-5300}"
+    environment:
+      SQL_SERVER: sqledge
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      ACCEPT_EULA: ${ACCEPT_EULA}
+      EMULATOR_HTTP_PORT: ${EMULATOR_HTTP_PORT:-5300}
+      SQL_WAIT_INTERVAL: ${SQL_WAIT_INTERVAL:-15}
+    depends_on:
+      - sqledge
+    networks:
+      sb-emulator:
+        aliases:
+          - sb-emulator
+
+  sqledge:
+    container_name: sbe-sqledge
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    environment:
+      ACCEPT_EULA: ${ACCEPT_EULA}
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    networks:
+      sb-emulator:
+        aliases:
+          - sqledge
+
+networks:
+  sb-emulator:

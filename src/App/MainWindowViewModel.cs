@@ -1,4 +1,5 @@
 using System.Reactive;
+using System.Reflection;
 using Avalonia.Threading;
 using ReactiveUI;
 using ServiceBusExplorer.ViewModels;
@@ -19,6 +20,14 @@ public class MainWindowViewModel : ReactiveObject
 
     public ReactiveCommand<Unit, Unit> DisconnectCommand { get; }
     public ObservableLoggerProvider LogSink { get; }
+    public string BuildRevision { get; } =
+        Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion
+        ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+        ?? "unknown";
+    public string InternalLimitations { get; } =
+        "Restricted evaluator build: feature parity is incomplete; SAS vault saving is opt-in when the platform vault is available.";
 
     public MainWindowViewModel(AppBootstrapper bootstrapper)
     {
@@ -27,19 +36,18 @@ public class MainWindowViewModel : ReactiveObject
         _currentPage = _connectVm;
         LogSink = bootstrapper.LogSink;
 
-        // Populate connection history from disk
-        var settings = bootstrapper.Settings.Load();
-        foreach (var cs in settings.ConnectionHistory)
-            _connectVm.ConnectionHistory.Add(cs);
+        _ = _connectVm.InitializeAsync();
 
-        _connectVm.ConnectCommand.Subscribe(opts =>
+        _ = LoadHistoryAsync();
+
+        _connectVm.ConnectCommand.Subscribe(request =>
         {
             _connectVm.IsConnecting = true;
             _connectVm.ErrorMessage = null;
 
-            bootstrapper.ConnectAsync(opts).ContinueWith(task =>
+            _bootstrapper.ConnectAsync(request, _connectVm).ContinueWith(async task =>
             {
-                Dispatcher.UIThread.Post(() =>
+                await Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     _connectVm.IsConnecting = false;
                     if (task.IsFaulted)
@@ -49,29 +57,36 @@ public class MainWindowViewModel : ReactiveObject
                     }
                     else
                     {
-                        var appMainVm = task.Result;
+                        var (appMainVm, profileId) = task.Result;
+                        await _connectVm.HandlePostConnectVaultAsync(profileId).ConfigureAwait(true);
                         appMainVm.DisconnectCommand = DisconnectCommand;
                         CurrentPage = appMainVm;
                         appMainVm.Dashboard.RefreshCommand.Execute().Subscribe();
 
-                        // Keep history in sync with what was just saved
-                        RefreshHistory();
+                        await RefreshHistoryAsync().ConfigureAwait(true);
                     }
                 });
             });
         });
 
-        DisconnectCommand = ReactiveCommand.Create(() =>
+        DisconnectCommand = ReactiveCommand.CreateFromTask(async () =>
         {
+            await _bootstrapper.DisconnectAsync().ConfigureAwait(true);
             CurrentPage = _connectVm;
         });
     }
 
-    private void RefreshHistory()
+    private async Task LoadHistoryAsync()
     {
-        var settings = _bootstrapper.Settings.Load();
+        var store = _bootstrapper.GetAppService<IConnectionProfileStore>();
+        var profiles = await store.ListAsync().ConfigureAwait(true);
         _connectVm.ConnectionHistory.Clear();
-        foreach (var cs in settings.ConnectionHistory)
-            _connectVm.ConnectionHistory.Add(cs);
+        foreach (var profile in profiles)
+            _connectVm.ConnectionHistory.Add(profile);
+    }
+
+    private async Task RefreshHistoryAsync()
+    {
+        await LoadHistoryAsync().ConfigureAwait(true);
     }
 }

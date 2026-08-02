@@ -1,3 +1,4 @@
+#nullable enable
 using System.Reactive;
 using ReactiveUI;
 
@@ -5,10 +6,15 @@ namespace ServiceBusExplorer.ViewModels;
 
 public class MainViewModel : ReactiveObject
 {
+    private readonly INamespaceService _namespaceService;
     private ConnectionOptions? _connection;
     private bool _isConnected;
     private string? _namespaceName;
     private string? _errorMessage;
+    private ConnectionScope _scope = ConnectionScope.Namespace;
+    private CapabilitySet _capabilities = CapabilitySet.ForNamespaceScope(adminProbeSucceeded: false);
+    private string? _scopedEntityPath;
+    private ScopedEntityKind _entityKind = ScopedEntityKind.None;
 
     public ConnectionOptions? Connection
     {
@@ -34,6 +40,66 @@ public class MainViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _errorMessage, value);
     }
 
+    public ConnectionScope Scope
+    {
+        get => _scope;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _scope, value);
+            this.RaisePropertyChanged(nameof(IsEntityScoped));
+            this.RaisePropertyChanged(nameof(ScopeBannerText));
+        }
+    }
+
+    public CapabilitySet Capabilities
+    {
+        get => _capabilities;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _capabilities, value);
+            this.RaisePropertyChanged(nameof(CanBrowseNamespace));
+            this.RaisePropertyChanged(nameof(ShowQueuesPanel));
+            this.RaisePropertyChanged(nameof(ShowTopicsPanel));
+        }
+    }
+
+    public string? ScopedEntityPath
+    {
+        get => _scopedEntityPath;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _scopedEntityPath, value);
+            this.RaisePropertyChanged(nameof(IsEntityScoped));
+            this.RaisePropertyChanged(nameof(ScopeBannerText));
+        }
+    }
+
+    public ScopedEntityKind EntityKind
+    {
+        get => _entityKind;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _entityKind, value);
+            this.RaisePropertyChanged(nameof(ShowQueuesPanel));
+            this.RaisePropertyChanged(nameof(ShowTopicsPanel));
+        }
+    }
+
+    public bool IsEntityScoped => Scope == ConnectionScope.Entity;
+
+    public bool CanBrowseNamespace => Capabilities.CanBrowseEntities;
+
+    public bool ShowQueuesPanel =>
+        Capabilities.CanBrowseEntities || EntityScopeHelper.PermitsSurface(EntityKind, BrowseSurface.Queues);
+
+    public bool ShowTopicsPanel =>
+        Capabilities.CanBrowseEntities || EntityScopeHelper.PermitsSurface(EntityKind, BrowseSurface.Topics);
+
+    public string ScopeBannerText =>
+        IsEntityScoped
+            ? $"Entity scope: {ScopedEntityPath}"
+            : "Namespace scope";
+
     public QueueListViewModel Queues { get; }
     public TopicListViewModel Topics { get; }
     public EventHubListViewModel EventHubs { get; }
@@ -51,8 +117,10 @@ public class MainViewModel : ReactiveObject
         EventHubListViewModel eventHubs,
         RelayListViewModel relays,
         NotificationHubListViewModel notificationHubs,
-        DashboardViewModel dashboard)
+        DashboardViewModel dashboard,
+        LiveConnectionContext? liveContext = null)
     {
+        _namespaceService = namespaceService;
         Queues = queues;
         Topics = topics;
         EventHubs = eventHubs;
@@ -60,17 +128,20 @@ public class MainViewModel : ReactiveObject
         NotificationHubs = notificationHubs;
         Dashboard = dashboard;
 
+        if (liveContext is not null)
+            ApplyConnectionScope(liveContext);
+
         ConnectCommand = ReactiveCommand.CreateFromTask<ConnectionOptions, Unit>(async opts =>
         {
             ErrorMessage = null;
             try
             {
-                var ok = await namespaceService.TestConnectionAsync(opts);
+                var ok = await _namespaceService.TestConnectionAsync(opts);
                 if (ok)
                 {
                     Connection = opts;
                     IsConnected = true;
-                    NamespaceName = await namespaceService.GetNamespaceNameAsync();
+                    NamespaceName = await _namespaceService.GetNamespaceNameAsync();
                 }
                 else
                 {
@@ -85,11 +156,35 @@ public class MainViewModel : ReactiveObject
             return Unit.Default;
         });
 
-        RefreshCommand = ReactiveCommand.CreateFromTask(() =>
-        {
+        RefreshCommand = ReactiveCommand.CreateFromTask(RefreshAllowedSurfacesAsync);
+    }
+
+    public void ApplyConnectionScope(LiveConnectionContext context, ScopedEntityKind? entityKind = null)
+    {
+        Scope = context.Scope;
+        Capabilities = context.Capabilities;
+        ScopedEntityPath = context.EntityPath;
+        EntityKind = EntityScopeHelper.ParseKind(context.EntityPath, entityKind);
+        IsConnected = context.State == ConnectionState.Connected;
+        NamespaceName ??= context.NamespaceEndpoint;
+
+        Queues.ApplyConnectionScope(Scope, ScopedEntityPath, Capabilities, EntityKind);
+        Topics.ApplyConnectionScope(Scope, ScopedEntityPath, Capabilities, EntityKind);
+
+        if (!ShowQueuesPanel)
+            Queues.ClearBrowseResults();
+        if (!ShowTopicsPanel)
+            Topics.ClearBrowseResults();
+    }
+
+    private async Task RefreshAllowedSurfacesAsync()
+    {
+        if (ShowQueuesPanel)
             Queues.RefreshCommand.Execute().Subscribe();
+
+        if (ShowTopicsPanel)
             Topics.RefreshCommand.Execute().Subscribe();
-            return Task.CompletedTask;
-        });
+
+        await Task.CompletedTask;
     }
 }

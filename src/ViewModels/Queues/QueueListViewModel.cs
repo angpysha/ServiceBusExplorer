@@ -7,16 +7,55 @@ namespace ServiceBusExplorer.ViewModels;
 
 public class QueueListViewModel : ReactiveObject
 {
+    private readonly INamespaceService _namespaceService;
     private readonly IQueueService _svc;
+    private readonly IMessageBrowseService _browseService;
+    private readonly IMessageSendService _sendService;
+    private readonly IMessageReceiveService _receiveService;
+    private readonly IPurgeService _purgeService;
+    private readonly IConfirmationService _confirmationService;
     private readonly SourceList<QueueInfo> _source = new();
+    private ConnectionScope _scope = ConnectionScope.Namespace;
+    private CapabilitySet _capabilities = CapabilitySet.ForNamespaceScope(adminProbeSucceeded: false);
+    private string? _entityPath;
+    private ScopedEntityKind _entityKind = ScopedEntityKind.None;
     private bool _isLoading;
     private string? _error;
     private QueueInfo? _selectedQueue;
     private QueueDetailViewModel? _selectedDetail;
     private bool _isCreating;
     private string _newQueueName = "";
+    private string? _adminStatus;
+    private EntityLifecycleKind? _adminOutcomeKind;
+    private bool _isAdminCancelled;
 
     public ReadOnlyObservableCollection<QueueInfo> Queues { get; }
+
+    /// <summary>Last administration outcome presentation (create/delete validation, auth, conflict, success).</summary>
+    public string? AdminStatus
+    {
+        get => _adminStatus;
+        private set => this.RaiseAndSetIfChanged(ref _adminStatus, value);
+    }
+
+    /// <summary>Kind of the last administration <see cref="EntityLifecycleResult{T}"/>, when any.</summary>
+    public EntityLifecycleKind? AdminOutcomeKind
+    {
+        get => _adminOutcomeKind;
+        private set => this.RaiseAndSetIfChanged(ref _adminOutcomeKind, value);
+    }
+
+    public bool IsAdminCancelled
+    {
+        get => _isAdminCancelled;
+        private set => this.RaiseAndSetIfChanged(ref _isAdminCancelled, value);
+    }
+
+    public bool IsAdminConflict => AdminOutcomeKind == EntityLifecycleKind.Conflict;
+    public bool IsAdminStale => IsAdminConflict;
+    public bool IsAdminValidationFailed => AdminOutcomeKind == EntityLifecycleKind.ValidationFailed;
+    public bool IsAdminFailed => AdminOutcomeKind == EntityLifecycleKind.Failed;
+    public bool IsAdminSucceeded => AdminOutcomeKind == EntityLifecycleKind.Succeeded;
 
     public bool IsLoading
     {
@@ -61,9 +100,29 @@ public class QueueListViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> CancelCreateCommand { get; }
     public ReactiveCommand<Unit, Unit> QuickCreateCommand { get; }
 
-    public QueueListViewModel(IQueueService svc)
+    public QueueListViewModel(
+        INamespaceService namespaceService,
+        IQueueService svc,
+        IMessageBrowseService browseService,
+        IMessageSendService sendService,
+        IMessageReceiveService receiveService,
+        IPurgeService purgeService,
+        IConfirmationService confirmationService,
+        LiveConnectionContext? liveContext = null)
     {
+        _namespaceService = namespaceService;
         _svc = svc;
+        _browseService = browseService;
+        _sendService = sendService;
+        _receiveService = receiveService;
+        _purgeService = purgeService;
+        _confirmationService = confirmationService;
+
+        if (liveContext is not null)
+            ApplyConnectionScope(
+                liveContext.Scope,
+                liveContext.EntityPath,
+                liveContext.Capabilities);
 
         _source.Connect()
             .Bind(out var bound)
@@ -73,7 +132,9 @@ public class QueueListViewModel : ReactiveObject
         this.WhenAnyValue(x => x.SelectedQueue)
             .Subscribe(q =>
             {
-                var detail = q == null ? null : new QueueDetailViewModel(_svc, q.Name);
+                var detail = q == null
+                    ? null
+                    : new QueueDetailViewModel(_svc, _browseService, _sendService, _receiveService, _purgeService, _confirmationService, q.Name);
                 if (detail != null)
                     detail.NavigateBackRequested.Subscribe(_ => SelectedQueue = null);
                 SelectedDetail = detail;
@@ -83,19 +144,29 @@ public class QueueListViewModel : ReactiveObject
         {
             IsLoading = true;
             Error = null;
+            ClearAdminPresentation();
             try
             {
-                var items = await _svc.ListAsync();
+                var result = await _namespaceService.BrowseQueuesAsync(
+                    new NamespaceBrowseRequest(
+                        _scope,
+                        _entityPath,
+                        _capabilities,
+                        BrowseSurface.Queues,
+                        _entityKind));
+
                 _source.Edit(list =>
                 {
                     list.Clear();
-                    list.AddRange(items);
+                    list.AddRange(result.Items);
                 });
-                return items;
+                Error = result.GuidanceMessage;
+                return result.Items;
             }
             catch (Exception ex)
             {
                 Error = ex.Message;
+                _source.Edit(list => list.Clear());
                 return (IReadOnlyList<QueueInfo>)Array.Empty<QueueInfo>();
             }
             finally
@@ -106,19 +177,46 @@ public class QueueListViewModel : ReactiveObject
 
         CreateCommand = ReactiveCommand.CreateFromTask<CreateQueueOptions, QueueInfo>(async opts =>
         {
-            var created = await _svc.CreateAsync(opts);
-            _source.Add(created);
-            return created;
+            var result = await _svc.CreateAsync(opts);
+            PresentAdminResult(result);
+            if (!result.IsSuccess || result.Entity is null)
+                throw new InvalidOperationException(result.SafeMessage);
+            _source.Add(result.Entity);
+            return result.Entity;
         });
 
         DeleteCommand = ReactiveCommand.CreateFromTask<string, Unit>(async name =>
         {
-            await _svc.DeleteAsync(name);
-            _source.Edit(list =>
+            var confirmation = await _confirmationService.ConfirmAsync(
+                new ConfirmationRequest(
+                    name,
+                    Source: null,
+                    "This queue and its messages will be permanently deleted.",
+                    ConfirmationRisk.Irreversible,
+                    ConfirmActionLabel: "Delete"));
+            if (confirmation != ConfirmationResult.Confirmed)
             {
-                var item = list.FirstOrDefault(q => q.Name == name);
-                if (item != null) list.Remove(item);
-            });
+                PresentAdminCancelled("Delete cancelled — queue was not deleted.");
+                return Unit.Default;
+            }
+
+            var result = await _svc.DeleteAsync(name);
+            PresentAdminResult(result);
+            if (result.IsSuccess)
+            {
+                _source.Edit(list =>
+                {
+                    var item = list.FirstOrDefault(q => q.Name == name);
+                    if (item != null) list.Remove(item);
+                });
+                if (SelectedQueue?.Name == name)
+                    SelectedQueue = null;
+                return Unit.Default;
+            }
+
+            if (result.Kind == EntityLifecycleKind.Conflict && result.Entity is not null)
+                ReplaceQueue(result.Entity);
+
             return Unit.Default;
         });
 
@@ -133,10 +231,84 @@ public class QueueListViewModel : ReactiveObject
             n => !string.IsNullOrWhiteSpace(n));
         QuickCreateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            var created = await _svc.CreateAsync(new CreateQueueOptions(NewQueueName));
-            _source.Add(created);
+            var result = await _svc.CreateAsync(new CreateQueueOptions(NewQueueName));
+            PresentAdminResult(result);
+            if (!result.IsSuccess || result.Entity is null)
+                return;
+
+            _source.Add(result.Entity);
             IsCreating = false;
             NewQueueName = "";
         }, canQuickCreate);
+    }
+
+    private void ReplaceQueue(QueueInfo queue)
+    {
+        _source.Edit(list =>
+        {
+            for (var i = 0; i < list.Count; i++)
+            {
+                if (list[i].Name == queue.Name)
+                {
+                    list[i] = queue;
+                    return;
+                }
+            }
+
+            list.Add(queue);
+        });
+    }
+
+    private void PresentAdminCancelled(string message)
+    {
+        IsAdminCancelled = true;
+        AdminOutcomeKind = null;
+        AdminStatus = message;
+        Error = null;
+        RaiseAdminFlags();
+    }
+
+    private void PresentAdminResult<T>(EntityLifecycleResult<T> result)
+    {
+        IsAdminCancelled = false;
+        AdminOutcomeKind = result.Kind;
+        AdminStatus = result.SafeMessage;
+        Error = result.IsSuccess ? null : result.SafeMessage;
+        RaiseAdminFlags();
+    }
+
+    private void ClearAdminPresentation()
+    {
+        IsAdminCancelled = false;
+        AdminOutcomeKind = null;
+        AdminStatus = null;
+        RaiseAdminFlags();
+    }
+
+    private void RaiseAdminFlags()
+    {
+        this.RaisePropertyChanged(nameof(IsAdminConflict));
+        this.RaisePropertyChanged(nameof(IsAdminStale));
+        this.RaisePropertyChanged(nameof(IsAdminValidationFailed));
+        this.RaisePropertyChanged(nameof(IsAdminFailed));
+        this.RaisePropertyChanged(nameof(IsAdminSucceeded));
+    }
+
+    public void ApplyConnectionScope(
+        ConnectionScope scope,
+        string? entityPath,
+        CapabilitySet capabilities,
+        ScopedEntityKind entityKind = ScopedEntityKind.None)
+    {
+        _scope = scope;
+        _entityPath = entityPath;
+        _capabilities = capabilities;
+        _entityKind = EntityScopeHelper.ParseKind(entityPath, entityKind);
+    }
+
+    public void ClearBrowseResults()
+    {
+        _source.Edit(list => list.Clear());
+        Error = null;
     }
 }

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Dual-purpose (per-user default + per-machine) unsigned MSI for Service Bus Explorer preview.
+  WiX Scope=perUserOrMachine => ALLUSERS=2 + MSIINSTALLPERUSER=1 (per-user default).
+  UpgradeCode is stable across preview builds; Product Version comes from -p:ProductVersion.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package
+      Name="Service Bus Explorer"
+      Manufacturer="Service Bus Explorer Contributors"
+      Version="$(var.ProductVersion)"
+      UpgradeCode="A7C4E9F1-2B8D-4E6A-9C31-5D8F0A1B2C3D"
+      Scope="perUserOrMachine"
+      Language="1033"
+      Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Service Bus Explorer is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ApplicationFolderName" Value="Service Bus Explorer" />
+    <Property Id="WixAppFolder" Value="WixPerUserFolder" />
+
+    <ui:WixUI Id="WixUI_Advanced" />
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="Service Bus Explorer" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Service Bus Explorer" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Service Bus Explorer" Level="1">
+      <ComponentGroupRef Id="PublishedAppFiles" />
+      <ComponentRef Id="ApplicationShortcut" />
+    </Feature>
+
+    <!-- Harvest self-contained publish output. PublishDir set via -p:PublishDir=... -->
+    <ComponentGroup Id="PublishedAppFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)**" />
+    </ComponentGroup>
+
+    <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder" Guid="B8D5F0A2-3C9E-4F7B-AD42-6E9F1B2C3D4E">
+      <Shortcut
+          Id="ApplicationStartMenuShortcut"
+          Name="Service Bus Explorer"
+          Description="Service Bus Explorer (preview)"
+          Target="[INSTALLFOLDER]ServiceBusExplorer.exe"
+          WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue
+          Root="HKMU"
+          Key="Software\ServiceBusExplorer\Preview"
+          Name="installed"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+    </Component>
+  </Package>
+</Wix>

@@ -1,0 +1,229 @@
+# Preview packages for the Avalonia (net10) app.
+# Windows: unsigned dual-purpose MSI. Linux: tar.gz. macOS: osx-arm64 DMG via fastlane notarize (fail-closed).
+name: preview-packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      notarize:
+        description: "Notarize macOS DMG (requires Apple secrets; fail-closed if missing)"
+        type: boolean
+        default: true
+      create_release:
+        description: "Upload artifacts to a draft GitHub prerelease (tag = App Version)"
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v*-preview*"
+      - "*-internal.*"
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  # --- US1: Windows MSI ---
+  windows-msi:
+    name: Windows MSI (win-x64)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build unsigned dual-purpose MSI
+        shell: pwsh
+        run: ./scripts/package-windows-msi.ps1
+
+      - name: Upload Windows MSI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-win-x64-msi
+          path: |
+            artifacts/windows/*.msi
+            artifacts/windows/*.sha256
+            artifacts/windows/MANIFEST.txt
+          if-no-files-found: error
+
+  # --- US4: Linux archive ---
+  linux-archive:
+    name: Linux archive (linux-x64)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish linux-x64 tar.gz
+        shell: pwsh
+        run: ./scripts/publish-preview.ps1 -Rids linux-x64
+
+      - name: Upload Linux archive artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-linux-x64
+          path: |
+            artifacts/preview/*-linux-x64.tar.gz
+            artifacts/preview/*-linux-x64.tar.gz.sha256
+            artifacts/preview/MANIFEST.txt
+          if-no-files-found: error
+
+  # --- US2: macOS notarized DMG (Apple Silicon only) ---
+  macos-dmg:
+    name: macOS DMG (osx-arm64)
+    runs-on: macos-14
+    # Prefer Environment with required reviewers in repo settings (operational hardening).
+    environment: macos-notarize
+    # Tags always notarize. workflow_dispatch respects the notarize input (default true).
+    # When notarize is false, skip the job entirely (no ad-hoc-as-release upload path).
+    if: >-
+      github.event_name == 'push'
+      || (github.event_name == 'workflow_dispatch' && inputs.notarize)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install fastlane
+        run: gem install fastlane --no-document
+
+      # Fail-closed: any required secret missing → job fails; upload step never runs.
+      - name: Require Apple signing + ASC API key secrets (fail-closed)
+        id: apple
+        shell: bash
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "${MACOS_CERTIFICATE_BASE64}" ]] || missing+=("MACOS_CERTIFICATE_BASE64")
+          [[ -n "${MACOS_CERTIFICATE_PWD}" ]] || missing+=("MACOS_CERTIFICATE_PWD")
+          [[ -n "${KEYCHAIN_PASSWORD}" ]] || missing+=("KEYCHAIN_PASSWORD")
+          [[ -n "${APP_STORE_CONNECT_API_KEY_ID}" ]] || missing+=("APP_STORE_CONNECT_API_KEY_ID")
+          [[ -n "${APP_STORE_CONNECT_ISSUER_ID}" ]] || missing+=("APP_STORE_CONNECT_ISSUER_ID")
+          [[ -n "${APP_STORE_CONNECT_API_KEY_P8_BASE64}" ]] || missing+=("APP_STORE_CONNECT_API_KEY_P8_BASE64")
+          if ((${#missing[@]} > 0)); then
+            echo "::error::Notarize mode requires secrets (fail-closed, no macOS upload): ${missing[*]}"
+            exit 1
+          fi
+          echo "secrets_ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Import Developer ID + ASC API key for fastlane
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
+          REQUIRE_ASC_API_KEY: "1"
+          NOTARIZE: "1"
+        run: |
+          chmod +x scripts/ci/import-apple-signing.sh scripts/package-macos-internal.sh
+          ./scripts/ci/import-apple-signing.sh
+
+      - name: Package signed DMG and fastlane notarize (osx-arm64)
+        env:
+          RID: osx-arm64
+          SKIP_LAUNCH_SMOKE: "1"
+          NOTARIZE: "1"
+        run: |
+          chmod +x scripts/package-macos-internal.sh
+          ./scripts/package-macos-internal.sh
+
+      # Upload only after successful notarize. No *.zip (demoted; DMG is evaluator primary).
+      - name: Upload macOS DMG artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-osx-arm64-dmg
+          path: |
+            artifacts/macos-internal/*.dmg
+            artifacts/macos-internal/*.dmg.sha256
+            artifacts/macos-internal/MANIFEST.txt
+          if-no-files-found: error
+
+  draft-release:
+    name: Draft GitHub prerelease
+    needs: [windows-msi, linux-archive, macos-dmg]
+    if: >-
+      always()
+      && needs.windows-msi.result == 'success'
+      && needs.linux-archive.result == 'success'
+      && (needs.macos-dmg.result == 'success' || needs.macos-dmg.result == 'skipped')
+      && (
+        github.event_name == 'push'
+        || (github.event_name == 'workflow_dispatch' && inputs.create_release)
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all preview artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: preview-*
+          merge-multiple: true
+
+      - name: Resolve version / tag
+        id: ver
+        shell: bash
+        run: |
+          VERSION="$(awk -F'[<>]' '/<Version>/{print $3; exit}' src/App/App.csproj)"
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${VERSION}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          ls -la release-assets
+
+      - name: Create or update draft prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          NOTES="$(cat <<EOF
+          ## Service Bus Explorer preview (${{ steps.ver.outputs.version }})
+
+          Avalonia (.NET 10) preview installers.
+
+          | Platform | Artifact |
+          |----------|----------|
+          | Windows x64 | Unsigned dual-purpose **MSI** (SmartScreen may warn) |
+          | macOS Apple Silicon | Notarized **DMG** (osx-arm64 only) |
+          | Linux x64 | **tar.gz** archive |
+
+          ### Checksums
+          Each artifact has a matching \`.sha256\` sidecar. See \`MANIFEST.txt\`.
+
+          Install guide: \`docs/preview-installation.md\`
+          EOF
+          )"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-assets/* --clobber
+          else
+            gh release create "$TAG" release-assets/* \
+              --draft \
+              --prerelease \
+              --title "Service Bus Explorer ${{ steps.ver.outputs.version }}" \
+              --notes "$NOTES"
+          fi

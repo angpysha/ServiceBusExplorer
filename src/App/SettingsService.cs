@@ -1,77 +1,235 @@
+#nullable enable
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ServiceBusExplorer.App;
 
 public class AppSettings
 {
-    public List<string> ConnectionHistory { get; set; } = new();
+    public const int CurrentSchemaVersion = 2;
+
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+    public List<ConnectionProfile> ConnectionHistory { get; set; } = [];
     public int DefaultPeekCount { get; set; } = 20;
     public string Theme { get; set; } = "Light";
 }
 
+public sealed class SettingsSafetyException(string message, Exception? innerException = null)
+    : InvalidOperationException(message, innerException);
+
 public class SettingsService
 {
-    private static readonly string ConfigDir =
+    private static readonly string DefaultConfigDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".config", "sbexplorer");
-    private static readonly string ConfigPath = Path.Combine(ConfigDir, "settings.json");
 
-    private static readonly JsonSerializerOptions _opts = new()
+    private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+
+    private static readonly string[] ForbiddenMarkers =
+    [
+        "SharedAccessKey",
+        "SharedAccessSignature",
+        "connectionString",
+        "accessToken"
+    ];
+
+    private readonly string _configPath;
+
+    public SettingsService(string? configPath = null)
+    {
+        _configPath = configPath ?? Path.Combine(DefaultConfigDir, "settings.json");
+    }
 
     public AppSettings Load()
     {
+        if (!File.Exists(_configPath))
+            return new AppSettings();
+
         try
         {
-            if (File.Exists(ConfigPath))
-            {
-                var json = File.ReadAllText(ConfigPath);
-                return JsonSerializer.Deserialize<AppSettings>(json, _opts) ?? new AppSettings();
-            }
+            var json = File.ReadAllText(_configPath);
+            if (RequiresSanitization(json))
+                return SanitizeUnsafeSettings();
+
+            var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions);
+            if (settings is null || !IsSafe(settings))
+                return SanitizeUnsafeSettings();
+
+            return settings;
         }
-        catch { /* first run or corrupted — return defaults */ }
-        return new AppSettings();
+        catch (SettingsSafetyException)
+        {
+            throw;
+        }
+        catch
+        {
+            return SanitizeUnsafeSettings();
+        }
     }
 
     public void Save(AppSettings settings)
     {
-        try
-        {
-            Directory.CreateDirectory(ConfigDir);
-            File.WriteAllText(ConfigPath, JsonSerializer.Serialize(settings, _opts));
-        }
-        catch { /* non-fatal — just skip persistence */ }
+        if (!IsSafe(settings))
+            throw new SettingsSafetyException("Unsafe connection history was rejected.");
+
+        WriteAtomically(settings);
     }
 
-    public AppSettings AddToHistory(string connectionString, AppSettings? existing = null)
+    public AppSettings RecordConnection(ConnectionOptions options, AppSettings? existing = null)
     {
         var settings = existing ?? Load();
-        // Mask/trim before storing — remove the key value for display, but keep full string for reconnect
-        var trimmed = connectionString.Trim();
-        settings.ConnectionHistory.Remove(trimmed);              // deduplicate
-        settings.ConnectionHistory.Insert(0, trimmed);           // most-recent first
+        var profile = CreateProfile(options);
+
+        var existingIndex = settings.ConnectionHistory.FindIndex(item =>
+            string.Equals(item.NamespaceEndpoint, profile.NamespaceEndpoint, StringComparison.OrdinalIgnoreCase) &&
+            item.AuthMode == profile.AuthMode &&
+            string.Equals(item.EntityPath, profile.EntityPath, StringComparison.Ordinal));
+
+        if (existingIndex >= 0)
+        {
+            var previous = settings.ConnectionHistory[existingIndex];
+            profile = profile with
+            {
+                Id = previous.Id,
+                // Default-off save: never inherit or invent a credential reference here.
+                CredentialReference = null,
+                SchemaVersion = ConnectionProfile.CurrentSchemaVersion
+            };
+            settings.ConnectionHistory.RemoveAt(existingIndex);
+        }
+
+        settings.ConnectionHistory.Insert(0, profile);
         if (settings.ConnectionHistory.Count > 10)
             settings.ConnectionHistory = settings.ConnectionHistory.Take(10).ToList();
         Save(settings);
         return settings;
     }
 
-    /// Returns a display-safe label (namespace name only) from a connection string.
-    public static string GetDisplayLabel(string connectionString)
+    private AppSettings SanitizeUnsafeSettings()
+    {
+        var sanitized = new AppSettings();
+        WriteAtomically(sanitized);
+        return sanitized;
+    }
+
+    private void WriteAtomically(AppSettings settings)
+    {
+        var directory = Path.GetDirectoryName(_configPath)
+            ?? throw new SettingsSafetyException("The settings path has no parent directory.");
+        var temporaryPath = $"{_configPath}.{Guid.NewGuid():N}.tmp";
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(
+                temporaryPath,
+                JsonSerializer.Serialize(settings, SerializerOptions));
+            File.Move(temporaryPath, _configPath, overwrite: true);
+        }
+        catch (Exception exception)
+        {
+            try
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
+            catch
+            {
+                // Preserve the original fail-closed persistence error.
+            }
+
+            throw new SettingsSafetyException(
+                "Connection history could not be sanitized and saved safely.",
+                exception);
+        }
+    }
+
+    private static ConnectionProfile CreateProfile(ConnectionOptions options)
+    {
+        var endpointValue = options.ConnectionString
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => part.Split('=', 2, StringSplitOptions.TrimEntries))
+            .Where(parts => parts.Length == 2)
+            .FirstOrDefault(parts =>
+                parts[0].Equals("Endpoint", StringComparison.OrdinalIgnoreCase))?[1];
+
+        if (!Uri.TryCreate(endpointValue, UriKind.Absolute, out var endpoint) ||
+            !endpoint.Scheme.Equals("sb", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "The connection endpoint is missing or invalid.",
+                nameof(options));
+        }
+
+        var namespaceEndpoint = endpoint.AbsoluteUri;
+        var label = endpoint.Host.Split('.', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()
+            ?? endpoint.Host;
+
+        return new ConnectionProfile(
+            label,
+            namespaceEndpoint,
+            options.AuthMode,
+            Normalize(options.TenantId),
+            Normalize(options.EntityPath))
+        {
+            Id = ConnectionProfile.CreateProfileId(),
+            SchemaVersion = ConnectionProfile.CurrentSchemaVersion,
+            CredentialReference = null
+        };
+    }
+
+    private static bool RequiresSanitization(string json)
     {
         try
         {
-            // Endpoint=sb://namespace.servicebus.windows.net/;...
-            var match = System.Text.RegularExpressions.Regex.Match(
-                connectionString, @"Endpoint=sb://([^.]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (match.Success) return match.Groups[1].Value;
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty(
+                    "connectionHistory",
+                    out var history) &&
+                history.ValueKind == JsonValueKind.Array &&
+                history.EnumerateArray().Any(item => item.ValueKind == JsonValueKind.String))
+            {
+                return true;
+            }
         }
-        catch { }
-        // Fallback: first 60 chars with key redacted
-        var idx = connectionString.IndexOf("SharedAccessKey=", StringComparison.OrdinalIgnoreCase);
-        return idx > 0 ? connectionString[..Math.Min(idx, 60)] + "…" : connectionString[..Math.Min(60, connectionString.Length)];
+        catch (JsonException)
+        {
+            return true;
+        }
+
+        return ForbiddenMarkers.Any(marker =>
+            json.Contains(marker, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool IsSafe(AppSettings settings) =>
+        settings.SchemaVersion is >= 1 and <= AppSettings.CurrentSchemaVersion &&
+        settings.ConnectionHistory.All(IsSafeProfile);
+
+    private static bool IsSafeProfile(ConnectionProfile profile) =>
+        profile.SchemaVersion is >= ConnectionProfile.MinimumSupportedSchemaVersion
+            and <= ConnectionProfile.CurrentSchemaVersion &&
+        !string.IsNullOrWhiteSpace(profile.Id) &&
+        Uri.TryCreate(profile.NamespaceEndpoint, UriKind.Absolute, out var endpoint) &&
+        endpoint.Scheme.Equals("sb", StringComparison.OrdinalIgnoreCase) &&
+        !ContainsForbiddenMarker(profile.Label) &&
+        !ContainsForbiddenMarker(profile.NamespaceEndpoint) &&
+        !ContainsForbiddenMarker(profile.TenantId) &&
+        !ContainsForbiddenMarker(profile.EntityPath) &&
+        !ContainsForbiddenMarker(profile.Id) &&
+        (profile.CredentialReference is not { } reference ||
+         CredentialReference.IsOpaque(reference.Value));
+
+    private static bool ContainsForbiddenMarker(string? value) =>
+        value is not null &&
+        ForbiddenMarkers.Any(marker =>
+            value.Contains(marker, StringComparison.OrdinalIgnoreCase));
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

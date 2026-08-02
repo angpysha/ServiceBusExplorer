@@ -1,53 +1,216 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ServiceBusExplorer.ViewModels"
+             xmlns:domain="using:ServiceBusExplorer"
+             xmlns:ctrl="using:ServiceBusExplorer.App.Views.Controls"
              x:DataType="vm:SendMessageViewModel"
              x:Class="ServiceBusExplorer.App.Views.Queues.SendMessageView">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.field-help">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+  </UserControl.Styles>
   <Grid RowDefinitions="Auto,*,Auto">
-    <TextBlock Grid.Row="0" Text="Send Message" FontWeight="SemiBold" Margin="0,0,0,8" />
+    <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Send Message" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding DestinationDescription}"
+                 TextWrapping="Wrap"
+                 AutomationProperties.Name="Actual publish destination"
+                 AutomationProperties.HelpText="Identifies the queue or topic that receives the message." />
+    </StackPanel>
 
     <ScrollViewer Grid.Row="1">
-      <StackPanel Spacing="6">
-        <TextBlock Text="Body *" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+      <StackPanel Spacing="12">
+        <Border Padding="10"
+                CornerRadius="4"
+                Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
+          <StackPanel Spacing="4">
+            <TextBlock Text="* Required. Conditional and optional fields are identified below."
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap" />
+            <TextBlock Classes="field-help"
+                       Text="Compose body, routing, identity, scheduling, session, reply, content-type, TTL, and typed custom properties supported by the destination." />
+          </StackPanel>
+        </Border>
+
+        <StackPanel Spacing="3">
+          <TextBlock Text="Body *" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Required. UTF-8 text sent as the message body; use JSON text when the content type is application/json." />
         <TextBox Text="{Binding Body}"
                  AcceptsReturn="True"
                  MinHeight="120"
                  FontFamily="Cascadia Code,Consolas,monospace"
-                 TextWrapping="Wrap" />
+                 TextWrapping="Wrap"
+                 AutomationProperties.Name="Body"
+                 AutomationProperties.HelpText="Required. UTF-8 text sent as the message body; use JSON text when the content type is application/json."
+                 AutomationProperties.IsRequiredForForm="True" />
+        </StackPanel>
 
-        <TextBlock Text="Content Type" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-        <TextBox Text="{Binding ContentType}" />
+        <StackPanel Spacing="3">
+          <TextBlock Text="Content type (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. MIME type describing the body, for example application/json; it does not transform the content." />
+          <TextBox Text="{Binding ContentType}"
+                   AutomationProperties.Name="Content type"
+                   AutomationProperties.HelpText="Optional. MIME type describing the body, for example application/json; it does not transform the content."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
 
-        <TextBlock Text="Message ID" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-        <TextBox Text="{Binding MessageId}" />
+        <StackPanel Spacing="3">
+          <TextBlock Text="Message ID (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Application-defined identifier; Azure duplicate detection uses it when enabled on the destination." />
+          <TextBox Text="{Binding MessageId}"
+                   AutomationProperties.Name="Message ID"
+                   AutomationProperties.HelpText="Optional. Application-defined identifier; Azure duplicate detection uses it when enabled on the destination."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
 
-        <TextBlock Text="Correlation ID" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-        <TextBox Text="{Binding CorrelationId}" />
+        <StackPanel Spacing="3">
+          <TextBlock Text="Correlation ID (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Associates related messages for application tracing; Azure Service Bus does not impose a format." />
+          <TextBox Text="{Binding CorrelationId}"
+                   AutomationProperties.Name="Correlation ID"
+                   AutomationProperties.HelpText="Optional. Associates related messages for application tracing; Azure Service Bus does not impose a format."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
 
-        <TextBlock Text="Session ID" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-        <TextBox Text="{Binding SessionId}" />
+        <StackPanel Spacing="3">
+          <TextBlock Text="Session ID (conditionally required)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Conditionally required for session-enabled destinations. Routes the message to that ordered session." />
+          <TextBox Text="{Binding SessionId}"
+                   AutomationProperties.Name="Session ID"
+                   AutomationProperties.HelpText="Conditionally required for session-enabled destinations. Routes the message to that ordered session."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
 
-        <TextBlock Text="To" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
-        <TextBox Text="{Binding To}" />
+        <StackPanel Spacing="3">
+          <TextBlock Text="Subject (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Application label/subject carried with the message for consumers and filters." />
+          <TextBox Text="{Binding Subject}"
+                   AutomationProperties.Name="Subject"
+                   AutomationProperties.HelpText="Optional. Application label/subject carried with the message for consumers and filters."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
 
-        <TextBlock Text="Application Properties (JSON)" FontSize="12" Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        <StackPanel Spacing="3">
+          <TextBlock Text="To (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional logical destination metadata for consumers; it does not override the actual queue or topic shown above." />
+          <TextBox Text="{Binding To}"
+                   AutomationProperties.Name="To"
+                   AutomationProperties.HelpText="Optional logical destination metadata for consumers; it does not override the actual queue or topic shown above."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <TextBlock Text="Reply To (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Address where replies should be sent; Azure Service Bus does not route automatically." />
+          <TextBox Text="{Binding ReplyTo}"
+                   AutomationProperties.Name="Reply To"
+                   AutomationProperties.HelpText="Optional. Address where replies should be sent; Azure Service Bus does not route automatically."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <TextBlock Text="Reply To Session ID (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Session identifier to set on reply messages for session-aware request/response." />
+          <TextBox Text="{Binding ReplyToSessionId}"
+                   AutomationProperties.Name="Reply To Session ID"
+                   AutomationProperties.HelpText="Optional. Session identifier to set on reply messages for session-aware request/response."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <TextBlock Text="Partition Key (optional)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Routes related messages to the same partition when the destination is partitioned." />
+          <TextBox Text="{Binding PartitionKey}"
+                   AutomationProperties.Name="Partition Key"
+                   AutomationProperties.HelpText="Optional. Routes related messages to the same partition when the destination is partitioned."
+                   AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+        <TextBlock Text="Application properties (optional JSON)" FontWeight="SemiBold" />
+        <TextBlock Classes="field-help"
+                   Text="Optional. JSON object of typed custom metadata (string, number, boolean, or null). Reserved broker property names are rejected." />
         <TextBox Text="{Binding PropertiesJson}"
                  AcceptsReturn="True"
                  MinHeight="60"
                  FontFamily="Cascadia Code,Consolas,monospace"
-                 TextWrapping="Wrap" />
+                 TextWrapping="Wrap"
+                 AutomationProperties.Name="Application properties"
+                 AutomationProperties.HelpText="Optional. JSON object of typed custom metadata (string, number, boolean, or null). Reserved broker property names are rejected."
+                 AutomationProperties.IsRequiredForForm="False" />
+        </StackPanel>
 
         <Separator Margin="0,4" />
 
-        <!-- Batch count + schedule -->
-        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <TextBlock Text="Count:" VerticalAlignment="Center" />
-          <NumericUpDown Value="{Binding SendCount}" Minimum="1" Maximum="1000" Width="80" />
-          <CheckBox Content="Schedule in" IsChecked="{Binding UseScheduledTime}" VerticalAlignment="Center" />
-          <NumericUpDown Value="{Binding ScheduleDelayMinutes}" Minimum="1" Maximum="10080" Width="80"
-                         IsEnabled="{Binding UseScheduledTime}" />
-          <TextBlock Text="min from now" VerticalAlignment="Center"
-                     Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+        <StackPanel Spacing="3">
+          <TextBlock Text="Message count *" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Required. Number of identical messages to send, from 1 to 1000." />
+          <NumericUpDown Value="{Binding SendCount}"
+                         Minimum="1"
+                         Maximum="1000"
+                         Increment="1"
+                         AutomationProperties.Name="Message count"
+                         AutomationProperties.HelpText="Required. Number of identical messages to send, from 1 to 1000."
+                         AutomationProperties.IsRequiredForForm="True" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <CheckBox Content="Schedule message (optional)"
+                    IsChecked="{Binding UseScheduledTime}"
+                    AutomationProperties.Name="Schedule message"
+                    AutomationProperties.HelpText="Optional. Enable to enqueue the message after the relative delay instead of immediately."
+                    AutomationProperties.IsRequiredForForm="False" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Enable to enqueue the message after the relative delay instead of immediately." />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <TextBlock Text="Schedule delay * (when scheduling)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Required when scheduling. Delay from now in D.HH:MM:SS[.fff] format; allowed range is 1 minute through 7 days." />
+          <ctrl:DurationEditor Value="{Binding ScheduleDelay}"
+                               Constraint="{x:Static domain:DurationConstraint.ScheduledEnqueueDelay}"
+                               IsEnabled="{Binding UseScheduledTime}"
+                               Width="300"
+                               AutomationProperties.Name="Schedule delay"
+                               AutomationProperties.HelpText="Required when scheduling. Delay from now in D.HH:MM:SS[.fff] format; Azure Service Bus enqueues after this interval."
+                               AutomationProperties.IsRequiredForForm="{Binding UseScheduledTime}" />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <CheckBox Content="Set time to live (optional)"
+                    IsChecked="{Binding UseTimeToLive}"
+                    AutomationProperties.Name="Set time to live"
+                    AutomationProperties.HelpText="Optional. Enable to set message TTL with full millisecond precision and no product day cap."
+                    AutomationProperties.IsRequiredForForm="False" />
+          <TextBlock Classes="field-help"
+                     Text="Optional. Message time to live in D.HH:MM:SS[.fff]; uses full DurationValue precision without a product day cap." />
+        </StackPanel>
+
+        <StackPanel Spacing="3">
+          <TextBlock Text="Time to live * (when enabled)" FontWeight="SemiBold" />
+          <TextBlock Classes="field-help"
+                     Text="Required when TTL is enabled. Whole-millisecond duration; no composer day cap is applied." />
+          <ctrl:DurationEditor Value="{Binding TimeToLive}"
+                               IsEnabled="{Binding UseTimeToLive}"
+                               Width="300"
+                               AutomationProperties.Name="Time to live"
+                               AutomationProperties.HelpText="Required when TTL is enabled. Whole-millisecond duration with full DurationValue precision."
+                               AutomationProperties.IsRequiredForForm="{Binding UseTimeToLive}" />
         </StackPanel>
       </StackPanel>
     </ScrollViewer>
@@ -56,7 +219,15 @@
       <TextBlock Text="{Binding Error}"
                  IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                  Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
-                 TextWrapping="Wrap" />
+                 TextWrapping="Wrap"
+                 AutomationProperties.Name="Send error"
+                 AutomationProperties.LiveSetting="Assertive" />
+      <TextBlock Text="{Binding Outcome}"
+                 IsVisible="{Binding Outcome, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                 Foreground="#107C10"
+                 TextWrapping="Wrap"
+                 AutomationProperties.Name="Send outcome"
+                 AutomationProperties.LiveSetting="Polite" />
       <Button Content="Send" Command="{Binding SendCommand}" HorizontalAlignment="Stretch" />
     </StackPanel>
   </Grid>

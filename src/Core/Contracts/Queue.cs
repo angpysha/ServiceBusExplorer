@@ -23,7 +23,9 @@ public record QueueInfo(
     string? UserMetadata = null,
     TimeSpan DuplicateDetectionHistoryTimeWindow = default,
     long SizeInBytes = 0,
-    bool EnableDeadLetteringOnMessageExpiration = false);
+    bool EnableDeadLetteringOnMessageExpiration = false,
+    /// <summary>Last-observed opaque service version/etag for optimistic concurrency.</summary>
+    string? ServiceVersion = null);
 
 public record CreateQueueOptions(
     string Name,

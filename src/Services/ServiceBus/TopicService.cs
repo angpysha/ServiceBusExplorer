@@ -1,16 +1,14 @@
-using Azure.Messaging.ServiceBus.Administration;
+#nullable enable
 using Microsoft.Extensions.Logging;
-using CoreEntityStatus = ServiceBusExplorer.EntityStatus;
-using SBEntityStatus = Azure.Messaging.ServiceBus.Administration.EntityStatus;
 
 namespace ServiceBusExplorer.Services;
 
 public class TopicService : ITopicService
 {
-    private readonly ServiceBusAdministrationClient _admin;
+    private readonly IServiceBusAdminAdapter _admin;
     private readonly ILogger<TopicService> _log;
 
-    public TopicService(ServiceBusAdministrationClient admin, ILogger<TopicService> log)
+    public TopicService(IServiceBusAdminAdapter admin, ILogger<TopicService> log)
     {
         _admin = admin;
         _log = log;
@@ -18,88 +16,161 @@ public class TopicService : ITopicService
 
     public async Task<IReadOnlyList<TopicInfo>> ListAsync(CancellationToken ct = default)
     {
-        var runtimeMap = new Dictionary<string, TopicRuntimeProperties>();
-        await foreach (var r in _admin.GetTopicsRuntimePropertiesAsync(ct))
-            runtimeMap[r.Name] = r;
-        var results = new List<TopicInfo>();
-        await foreach (var p in _admin.GetTopicsAsync(ct))
-        {
-            if (runtimeMap.TryGetValue(p.Name, out var runtime))
-                results.Add(MapFull(p, runtime));
-        }
-        return results;
+        var snapshots = await _admin.ListTopicsAsync(ct);
+        return snapshots.Select(MapTopic).ToList();
     }
 
     public async Task<TopicInfo> GetAsync(string name, CancellationToken ct = default)
     {
-        var runtime = await _admin.GetTopicRuntimePropertiesAsync(name, ct);
-        var props = await _admin.GetTopicAsync(name, ct);
-        return MapFull(props.Value, runtime.Value);
+        var snapshot = await _admin.GetTopicAsync(name, ct);
+        if (snapshot is null)
+            throw new InvalidOperationException($"Topic '{name}' was not found.");
+        return MapTopic(snapshot);
     }
 
-    public async Task<TopicInfo> CreateAsync(CreateTopicOptions opts, CancellationToken ct = default)
+    public async Task<EntityLifecycleResult<TopicInfo>> CreateAsync(
+        CreateTopicOptions opts,
+        CancellationToken ct = default)
     {
-        var createOpts = new Azure.Messaging.ServiceBus.Administration.CreateTopicOptions(opts.Name)
+        var errors = EntityAdminValidation.ValidateCreateTopic(opts);
+        if (errors.Count > 0)
         {
-            EnableBatchedOperations = opts.EnableBatchedOperations,
-            EnablePartitioning = opts.EnablePartitioning
-        };
-        if (opts.DefaultMessageTimeToLive.HasValue)
-            createOpts.DefaultMessageTimeToLive = opts.DefaultMessageTimeToLive.Value;
+            return EntityLifecycleResult<TopicInfo>.ValidationFailed(
+                "Topic create options are invalid.",
+                errors.ToArray());
+        }
 
-        var created = await _admin.CreateTopicAsync(createOpts, ct);
-        var runtime = await _admin.GetTopicRuntimePropertiesAsync(opts.Name, ct);
-        return MapFull(created.Value, runtime.Value);
+        try
+        {
+            var created = await _admin.CreateTopicAsync(
+                new TopicAdminCreateRequest(
+                    opts.Name,
+                    opts.DefaultMessageTimeToLive,
+                    opts.EnableBatchedOperations,
+                    opts.EnablePartitioning),
+                ct);
+            var entity = MapTopic(created);
+            _log.LogInformation("Created topic {TopicName}", entity.Name);
+            return EntityLifecycleResult<TopicInfo>.Succeeded(
+                entity,
+                entity.ServiceVersion,
+                $"Topic '{entity.Name}' was created.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Failed to create topic {TopicName}", opts.Name);
+            return EntityLifecycleResult<TopicInfo>.Failed(
+                $"Failed to create topic '{opts.Name}'.");
+        }
     }
 
-    public async Task<TopicInfo> UpdateAsync(TopicInfo updated, CancellationToken ct = default)
+    public async Task<EntityLifecycleResult<TopicInfo>> UpdateAsync(
+        TopicInfo updated,
+        CancellationToken ct = default)
     {
-        var existing = await _admin.GetTopicAsync(updated.Name, ct);
-        var props = existing.Value;
-        props.EnableBatchedOperations = updated.EnableBatchedOperations;
-        props.DefaultMessageTimeToLive = updated.DefaultMessageTimeToLive == default ? props.DefaultMessageTimeToLive : updated.DefaultMessageTimeToLive;
-        props.AutoDeleteOnIdle = updated.AutoDeleteOnIdle == default ? props.AutoDeleteOnIdle : updated.AutoDeleteOnIdle;
-        props.MaxSizeInMegabytes = (int)updated.MaxSizeInMegabytes;
-        props.DuplicateDetectionHistoryTimeWindow = updated.DuplicateDetectionHistoryTimeWindow == default ? props.DuplicateDetectionHistoryTimeWindow : updated.DuplicateDetectionHistoryTimeWindow;
-        if (updated.UserMetadata != null) props.UserMetadata = updated.UserMetadata;
-        props.Status = MapStatus(updated.Status);
+        var current = await _admin.GetTopicAsync(updated.Name, ct);
+        if (current is null)
+        {
+            return EntityLifecycleResult<TopicInfo>.NotFound(
+                $"Topic '{updated.Name}' was not found.");
+        }
 
-        var result = await _admin.UpdateTopicAsync(props, ct);
-        var runtime = await _admin.GetTopicRuntimePropertiesAsync(updated.Name, ct);
-        return MapFull(result.Value, runtime.Value);
+        var errors = EntityAdminValidation.ValidateTopicUpdate(updated, current);
+        if (errors.Count > 0)
+        {
+            return EntityLifecycleResult<TopicInfo>.ValidationFailed(
+                "Topic update options are invalid or unsupported.",
+                errors.ToArray());
+        }
+
+        if (!string.IsNullOrEmpty(updated.ServiceVersion) &&
+            !string.Equals(updated.ServiceVersion, current.ServiceVersion, StringComparison.Ordinal))
+        {
+            var refreshed = MapTopic(current);
+            return EntityLifecycleResult<TopicInfo>.Conflict(
+                refreshed,
+                refreshed.ServiceVersion,
+                $"Topic '{updated.Name}' was modified by another client; refresh and retry.");
+        }
+
+        try
+        {
+            var snapshot = current with
+            {
+                DefaultMessageTimeToLive = updated.DefaultMessageTimeToLive == default
+                    ? current.DefaultMessageTimeToLive
+                    : updated.DefaultMessageTimeToLive,
+                AutoDeleteOnIdle = updated.AutoDeleteOnIdle == default
+                    ? current.AutoDeleteOnIdle
+                    : updated.AutoDeleteOnIdle,
+                MaxSizeInMegabytes = updated.MaxSizeInMegabytes,
+                EnableBatchedOperations = updated.EnableBatchedOperations,
+                DuplicateDetectionHistoryTimeWindow =
+                    updated.DuplicateDetectionHistoryTimeWindow == default
+                        ? current.DuplicateDetectionHistoryTimeWindow
+                        : updated.DuplicateDetectionHistoryTimeWindow,
+                UserMetadata = updated.UserMetadata,
+                Status = updated.Status
+            };
+            var saved = await _admin.UpdateTopicAsync(snapshot, ct);
+            var entity = MapTopic(saved);
+            return EntityLifecycleResult<TopicInfo>.Succeeded(
+                entity,
+                entity.ServiceVersion,
+                $"Topic '{entity.Name}' was updated.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Failed to update topic {TopicName}", updated.Name);
+            return EntityLifecycleResult<TopicInfo>.Failed(
+                $"Failed to update topic '{updated.Name}'.");
+        }
     }
 
-    public async Task DeleteAsync(string name, CancellationToken ct = default) =>
-        await _admin.DeleteTopicAsync(name, ct);
-
-    private static TopicInfo MapFull(TopicProperties p, TopicRuntimeProperties r) => new(
-        Name: p.Name,
-        SubscriptionCount: r.SubscriptionCount,
-        SizeInBytes: r.SizeInBytes,
-        EnableBatchedOperations: p.EnableBatchedOperations,
-        EnablePartitioning: p.EnablePartitioning,
-        Status: MapEntityStatus(p.Status),
-        DefaultMessageTimeToLive: p.DefaultMessageTimeToLive,
-        AutoDeleteOnIdle: p.AutoDeleteOnIdle,
-        MaxSizeInMegabytes: p.MaxSizeInMegabytes,
-        UserMetadata: string.IsNullOrEmpty(p.UserMetadata) ? null : p.UserMetadata,
-        DuplicateDetectionHistoryTimeWindow: p.DuplicateDetectionHistoryTimeWindow,
-        RequiresDuplicateDetection: p.RequiresDuplicateDetection);
-
-    private static CoreEntityStatus MapEntityStatus(SBEntityStatus s)
+    public async Task<EntityLifecycleResult<TopicInfo?>> DeleteAsync(
+        string name,
+        CancellationToken ct = default)
     {
-        if (s == SBEntityStatus.Disabled) return CoreEntityStatus.Disabled;
-        if (s == SBEntityStatus.SendDisabled) return CoreEntityStatus.SendDisabled;
-        if (s == SBEntityStatus.ReceiveDisabled) return CoreEntityStatus.ReceiveDisabled;
-        if (s == SBEntityStatus.Active) return CoreEntityStatus.Active;
-        return CoreEntityStatus.Unknown;
+        var existing = await _admin.GetTopicAsync(name, ct);
+        if (existing is null)
+        {
+            return EntityLifecycleResult<TopicInfo?>.NotFound($"Topic '{name}' was not found.");
+        }
+
+        try
+        {
+            await _admin.DeleteTopicAsync(name, ct);
+            var stillThere = await _admin.GetTopicAsync(name, ct);
+            if (stillThere is not null)
+            {
+                return EntityLifecycleResult<TopicInfo?>.Failed(
+                    $"Topic '{name}' delete did not remove the entity.");
+            }
+
+            return EntityLifecycleResult<TopicInfo?>.Succeeded(
+                null,
+                null,
+                $"Topic '{name}' was deleted.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Failed to delete topic {TopicName}", name);
+            return EntityLifecycleResult<TopicInfo?>.Failed($"Failed to delete topic '{name}'.");
+        }
     }
 
-    private static SBEntityStatus MapStatus(CoreEntityStatus s)
-    {
-        if (s == CoreEntityStatus.Disabled) return SBEntityStatus.Disabled;
-        if (s == CoreEntityStatus.SendDisabled) return SBEntityStatus.SendDisabled;
-        if (s == CoreEntityStatus.ReceiveDisabled) return SBEntityStatus.ReceiveDisabled;
-        return SBEntityStatus.Active;
-    }
+    private static TopicInfo MapTopic(TopicAdminSnapshot s) => new(
+        Name: s.Name,
+        SubscriptionCount: s.SubscriptionCount,
+        SizeInBytes: s.SizeInBytes,
+        EnableBatchedOperations: s.EnableBatchedOperations,
+        EnablePartitioning: s.EnablePartitioning,
+        Status: s.Status,
+        DefaultMessageTimeToLive: s.DefaultMessageTimeToLive,
+        AutoDeleteOnIdle: s.AutoDeleteOnIdle,
+        MaxSizeInMegabytes: s.MaxSizeInMegabytes,
+        UserMetadata: s.UserMetadata,
+        DuplicateDetectionHistoryTimeWindow: s.DuplicateDetectionHistoryTimeWindow,
+        RequiresDuplicateDetection: s.RequiresDuplicateDetection,
+        ServiceVersion: s.ServiceVersion);
 }

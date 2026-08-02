@@ -7,7 +7,7 @@
         Width="1200" Height="760"
         MinWidth="820" MinHeight="560">
 
-  <Grid RowDefinitions="Auto,*,Auto,Auto">
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
 
     <!-- Menu bar -->
     <Menu Grid.Row="0">
@@ -23,11 +23,29 @@
       </MenuItem>
     </Menu>
 
+    <Border Grid.Row="1"
+            Background="#FFF4CE"
+            BorderBrush="#D8A800"
+            BorderThickness="0,0,0,1"
+            Padding="12,7">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBlock Text="Internal development build"
+                   FontWeight="SemiBold"
+                   Foreground="#5C4400"
+                   AutomationProperties.Name="Internal development build status" />
+        <TextBlock Text="{Binding BuildRevision, StringFormat='Revision {0}'}"
+                   Foreground="#5C4400" />
+        <TextBlock Text="{Binding InternalLimitations}"
+                   Foreground="#5C4400"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
     <!-- Main page content -->
-    <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" />
+    <ContentControl Grid.Row="2" Content="{Binding CurrentPage}" />
 
     <!-- Resize handle for log panel -->
-    <GridSplitter Grid.Row="2"
+    <GridSplitter Grid.Row="3"
                   x:Name="LogSplitter"
                   Height="4"
                   HorizontalAlignment="Stretch"
@@ -35,7 +53,7 @@
                   IsVisible="{Binding IsLogVisible, ElementName=LogPanel}" />
 
     <!-- Log panel -->
-    <Border Grid.Row="3"
+    <Border Grid.Row="4"
             x:Name="LogPanel"
             BorderThickness="0,1,0,0"
             BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"

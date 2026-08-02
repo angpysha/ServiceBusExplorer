@@ -17,7 +17,10 @@ public record SubscriptionInfo(
     string? ForwardDeadLetteredMessagesTo = null,
     string? UserMetadata = null,
     bool EnableDeadLetteringOnMessageExpiration = false,
-    bool EnableDeadLetteringOnFilterEvaluationExceptions = true);
+    bool EnableDeadLetteringOnFilterEvaluationExceptions = true,
+    bool RequiresSession = false,
+    // Opaque last-observed service version/etag for optimistic concurrency.
+    string ServiceVersion = "");
 
 public record CreateSubscriptionOptions(
     string TopicName,

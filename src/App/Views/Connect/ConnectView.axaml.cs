@@ -7,13 +7,14 @@ public partial class ConnectView : UserControl
 {
     public ConnectView() => InitializeComponent();
 
-    // When a history item is selected, copy it to the ConnectionString field
-    private void OnHistorySelectionChanged(object? sender, SelectionChangedEventArgs e)
+    // Restore only non-secret metadata; SAS must always be entered again unless vault retrieve succeeds.
+    private async void OnHistorySelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.AddedItems.Count > 0 && e.AddedItems[0] is string cs
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is ConnectionProfile profile
             && DataContext is ConnectViewModel vm)
         {
-            vm.ConnectionString = cs;
+            await vm.ApplyProfileAsync(profile);
+            ConnectionStringBox.Focus();
         }
     }
 }

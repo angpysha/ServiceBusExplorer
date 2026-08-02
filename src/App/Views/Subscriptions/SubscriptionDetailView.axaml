@@ -11,17 +11,82 @@
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" Margin="16,12,16,6">
       <TextBlock Text="{Binding Info.Name, FallbackValue='Subscription'}"
                  FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Button Content="Delete"
+              Command="{Binding DeleteCommand}"
+              VerticalAlignment="Center"
+              Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+              AutomationProperties.Name="Delete subscription"
+              AutomationProperties.HelpText="Requires confirmation with the exact subscription name." />
       <TextBlock Text="Loading…" IsVisible="{Binding IsLoading}"
                  Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
                  VerticalAlignment="Center" />
     </StackPanel>
 
-    <!-- Error -->
-    <TextBlock Grid.Row="1" Margin="16,0,16,4"
-               Text="{Binding Error}"
-               IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-               Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
-               TextWrapping="Wrap" />
+    <!-- Error + purge + admin operation state -->
+    <StackPanel Grid.Row="1" Margin="16,0,16,4" Spacing="4">
+      <TextBlock Text="{Binding Error}"
+                 IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                 Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                 TextWrapping="Wrap" />
+      <StackPanel Spacing="2"
+                  IsVisible="{Binding AdminStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Text="{Binding AdminStatus}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   AutomationProperties.Name="Administration status"
+                   AutomationProperties.LiveSetting="Polite" />
+        <TextBlock Text="Stale — conflict with service state"
+                   IsVisible="{Binding IsAdminStale}"
+                   Foreground="#C19C00"
+                   FontSize="11"
+                   AutomationProperties.Name="Administration stale conflict" />
+        <TextBlock Text="Validation failed"
+                   IsVisible="{Binding IsAdminValidationFailed}"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   FontSize="11" />
+        <TextBlock Text="Administration failed"
+                   IsVisible="{Binding IsAdminFailed}"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   FontSize="11" />
+        <TextBlock Text="Administration succeeded"
+                   IsVisible="{Binding IsAdminSucceeded}"
+                   Foreground="#107C10"
+                   FontSize="11" />
+      </StackPanel>
+      <StackPanel Spacing="4"
+                  IsVisible="{Binding PurgeStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <TextBlock Text="{Binding PurgeStatus}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   AutomationProperties.Name="Purge status"
+                   AutomationProperties.LiveSetting="Polite" />
+        <TextBlock Text="Purge cancelled"
+                   IsVisible="{Binding IsPurgeCancelled}"
+                   Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                   FontSize="11"
+                   AutomationProperties.Name="Purge cancelled" />
+        <TextBlock Text="Partial purge — confirmed removals only; remainder uncertain"
+                   IsVisible="{Binding IsPurgePartial}"
+                   Foreground="#C19C00"
+                   FontSize="11"
+                   AutomationProperties.Name="Partial purge" />
+        <TextBlock Text="Purge failed"
+                   IsVisible="{Binding IsPurgeFailed}"
+                   Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
+                   FontSize="11"
+                   AutomationProperties.Name="Purge failed" />
+        <TextBlock Text="Purge completed"
+                   IsVisible="{Binding IsPurgeSucceeded}"
+                   Foreground="#107C10"
+                   FontSize="11"
+                   AutomationProperties.Name="Purge completed" />
+        <Button Content="Cancel purge"
+                Command="{Binding CancelPurgeCommand}"
+                IsVisible="{Binding IsPurging}"
+                HorizontalAlignment="Left"
+                AutomationProperties.Name="Cancel purge" />
+      </StackPanel>
+    </StackPanel>
 
     <!-- Tabs -->
     <TabControl Grid.Row="2" Margin="4,0,4,4">
@@ -67,16 +132,32 @@
             <Grid ColumnDefinitions="180,*"
                   RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
               <TextBlock Grid.Row="0" Grid.Column="0" Text="Lock Duration" VerticalAlignment="Center" Margin="0,0,12,8" />
-              <ctrl:TimeSpanControl Grid.Row="0" Grid.Column="1" Value="{Binding LockDuration}" Margin="0,0,0,8" />
+              <ctrl:DurationEditor Grid.Row="0" Grid.Column="1"
+                                   Value="{Binding LockDuration}"
+                                   Constraint="{x:Static domain:DurationConstraint.LockDuration}"
+                                   Margin="0,0,0,8" />
 
-              <TextBlock Grid.Row="1" Grid.Column="0" Text="Max Delivery Count" VerticalAlignment="Center" Margin="0,0,12,8" />
-              <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding MaxDeliveryCount}" Minimum="1" Maximum="2000" Width="120" HorizontalAlignment="Left" Margin="0,0,0,8" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="Max delivery count" VerticalAlignment="Center" Margin="0,0,12,8" />
+              <NumericUpDown Grid.Row="1" Grid.Column="1"
+                             Value="{Binding MaxDeliveryCount}"
+                             Minimum="1"
+                             Maximum="2000"
+                             Increment="1"
+                             AutomationProperties.Name="Max delivery count"
+                             AutomationProperties.HelpText="Maximum delivery attempts before Azure Service Bus dead-letters a message."
+                             Margin="0,0,0,8" />
 
               <TextBlock Grid.Row="2" Grid.Column="0" Text="Message TTL" VerticalAlignment="Center" Margin="0,0,12,8" />
-              <ctrl:TimeSpanControl Grid.Row="2" Grid.Column="1" Value="{Binding DefaultMessageTimeToLive}" Margin="0,0,0,8" />
+              <ctrl:DurationEditor Grid.Row="2" Grid.Column="1"
+                                   Value="{Binding DefaultMessageTimeToLive}"
+                                   Constraint="{x:Static domain:DurationConstraint.DefaultMessageTimeToLive}"
+                                   Margin="0,0,0,8" />
 
               <TextBlock Grid.Row="3" Grid.Column="0" Text="Auto-delete on Idle" VerticalAlignment="Center" Margin="0,0,12,8" />
-              <ctrl:TimeSpanControl Grid.Row="3" Grid.Column="1" Value="{Binding AutoDeleteOnIdle}" Margin="0,0,0,8" />
+              <ctrl:DurationEditor Grid.Row="3" Grid.Column="1"
+                                   Value="{Binding AutoDeleteOnIdle}"
+                                   Constraint="{x:Static domain:DurationConstraint.AutoDeleteOnIdle}"
+                                   Margin="0,0,0,8" />
 
               <TextBlock Grid.Row="4" Grid.Column="0" Text="Batched Operations" VerticalAlignment="Center" Margin="0,0,12,8" />
               <CheckBox Grid.Row="4" Grid.Column="1" IsChecked="{Binding EnableBatchedOperations}" Margin="0,0,0,8" />
@@ -112,9 +193,21 @@
       <TabItem Header="Messages">
         <Grid RowDefinitions="Auto,*,Auto">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="8,8,8,4">
-            <NumericUpDown Value="{Binding PeekCount}" Minimum="1" Maximum="1000" Width="80" />
+            <TextBlock Text="Messages to peek" VerticalAlignment="Center" />
+            <NumericUpDown Value="{Binding PeekCount}"
+                           Minimum="1"
+                           Maximum="1000"
+                           Increment="1"
+                           AutomationProperties.Name="Messages to peek"
+                           AutomationProperties.HelpText="Maximum number of messages to inspect without locking or removing them." />
+            <ComboBox ItemsSource="{Binding SourceOptions}"
+                      SelectedItem="{Binding SelectedSource}"
+                      PlaceholderText="Select source"
+                      MinWidth="190"
+                      AutomationProperties.Name="Message source" />
             <!-- Peek mode buttons -->
             <Button Content="Peek"    Command="{Binding PeekCommand}"          IsVisible="{Binding !IsReceiveMode}" />
+            <Button Content="Load more" Command="{Binding LoadMoreObservedCommand}" IsVisible="{Binding HasMoreObservedMessages}" />
             <Button Content="Purge"   Command="{Binding PurgeCommand}"         IsVisible="{Binding !IsReceiveMode}" />
             <Button Content="Receive" Command="{Binding StartReceiveCommand}"  IsVisible="{Binding !IsReceiveMode}" />
             <!-- Receive mode buttons -->
@@ -124,11 +217,34 @@
                        Foreground="{DynamicResource SystemControlErrorTextForegroundBrush}"
                        VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold" />
           </StackPanel>
-          <!-- Tag relays ViewModel to DataTemplate context menus -->
+          <!-- Peek/browse message list -->
+          <ListBox Grid.Row="1" x:Name="SubObservedMessagesList"
+                   Tag="{Binding}"
+                   ItemsSource="{Binding ObservedMessages}"
+                   SelectedItem="{Binding SelectedObservedMessage}"
+                   IsVisible="{Binding !IsReceiveMode}"
+                   Margin="8,0">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <StackPanel Spacing="2" Margin="4,2">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding MessageId}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Source}" FontSize="11"
+                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                    <TextBlock Text="{Binding Body.Kind}" FontSize="11"
+                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding EnqueuedAt, StringFormat='Enqueued: {0:g}'}" FontSize="11"
+                             Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
           <ListBox Grid.Row="1" x:Name="SubMessagesList"
                    Tag="{Binding}"
                    ItemsSource="{Binding Messages}"
                    SelectedItem="{Binding SelectedMessage}"
+                   IsVisible="{Binding IsReceiveMode}"
                    Margin="8,0">
             <ListBox.ItemTemplate>
               <DataTemplate>
@@ -157,6 +273,37 @@
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
+          <Border Grid.Row="2" BorderThickness="0,1,0,0" MaxHeight="220"
+                  BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                  IsVisible="{Binding SelectedObservedMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                  Padding="8">
+            <Grid ColumnDefinitions="*,Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding SelectedObservedMessage.MessageId, StringFormat='ID: {0}'}" Margin="0,2" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding SelectedObservedMessage.SequenceNumber, StringFormat='Seq: {0}'}" Margin="0,2" />
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding SelectedObservedMessage.Source, StringFormat='Source: {0}'}" Margin="0,2" />
+              <TextBlock Grid.Row="3" Grid.Column="0" Text="{Binding SelectedObservedMessage.Body.Kind, StringFormat='Body: {0}'}" Margin="0,2" />
+              <TextBlock Grid.Row="4" Grid.Column="0"
+                         Text="{Binding SelectedObservedMessage.Body.FullLengthBytes, StringFormat='Full size: {0} bytes (truncated)'}"
+                         IsVisible="{Binding SelectedObservedMessage.Body.FullLengthBytes, Converter={x:Static ObjectConverters.IsNotNull}}"
+                         Margin="0,2" />
+              <StackPanel Grid.Row="0" Grid.Column="1" Grid.RowSpan="5" Orientation="Vertical" Spacing="6" Margin="8,0">
+                <TextBlock Text="Sensitive content" FontSize="11"
+                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                           TextWrapping="Wrap" MaxWidth="120" />
+                <Button Content="Copy body" Command="{Binding CopyObservedBodyCommand}"
+                        AutomationProperties.Name="Copy message body"
+                        AutomationProperties.HelpText="Copies the displayed body after warning that content may be sensitive." />
+                <Button Content="Export" Command="{Binding ExportObservedBodyCommand}"
+                        AutomationProperties.Name="Export message body"
+                        AutomationProperties.HelpText="Exports the displayed body after warning that content may be sensitive." />
+              </StackPanel>
+              <TextBox Grid.Row="0" Grid.Column="2" Grid.RowSpan="5"
+                       Text="{Binding SelectedObservedMessage.Body.DisplayText}"
+                       IsReadOnly="True" AcceptsReturn="True"
+                       FontFamily="Courier New,monospace"
+                       TextWrapping="Wrap" />
+            </Grid>
+          </Border>
           <Border Grid.Row="2" BorderThickness="0,1,0,0" MaxHeight="180"
                   BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                   IsVisible="{Binding SelectedMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
@@ -177,19 +324,41 @@
         </Grid>
       </TabItem>
 
-      <!-- Dead-letter tab -->
-      <TabItem Header="Dead-letter">
-        <Grid RowDefinitions="Auto,*">
+      <!-- Explicit source tab -->
+      <TabItem Header="Source messages">
+        <Grid RowDefinitions="Auto,Auto,*">
           <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="8,8,8,4">
-            <NumericUpDown Value="{Binding PeekCount}" Minimum="1" Maximum="1000" Width="80" />
-            <Button Content="Peek DL" Command="{Binding PeekCommand}" />
-            <Button Content="Purge DL" Command="{Binding PurgeCommand}" />
+            <TextBlock Text="Messages to peek" VerticalAlignment="Center" />
+            <NumericUpDown Value="{Binding PeekCount}"
+                           Minimum="1"
+                           Maximum="1000"
+                           Increment="1"
+                           AutomationProperties.Name="Messages to peek"
+                           AutomationProperties.HelpText="Maximum number of messages to inspect without locking or removing them." />
+            <ComboBox ItemsSource="{Binding SourceOptions}"
+                      SelectedItem="{Binding SelectedSource}"
+                      PlaceholderText="Select source"
+                      MinWidth="190"
+                      AutomationProperties.Name="Message source" />
+            <Button Content="Peek" Command="{Binding PeekCommand}" />
+            <Button Content="Load more" Command="{Binding LoadMoreObservedCommand}" IsVisible="{Binding HasMoreObservedMessages}" />
+            <Button Content="Purge" Command="{Binding PurgeCommand}" />
           </StackPanel>
-          <ListBox Grid.Row="1" ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}" Margin="8,0">
+          <TextBlock Grid.Row="1" Margin="8,0,8,4"
+                     Text="{Binding BrowseAvailability, StringFormat='Source status: {0}'}"
+                     FontSize="11"
+                     Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+          <ListBox Grid.Row="2" ItemsSource="{Binding ObservedMessages}" SelectedItem="{Binding SelectedObservedMessage}" Margin="8,0,8,0">
             <ListBox.ItemTemplate>
               <DataTemplate>
                 <StackPanel Spacing="2" Margin="4,2">
-                  <TextBlock Text="{Binding MessageId}" FontWeight="SemiBold" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding MessageId}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Source}" FontSize="11"
+                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                    <TextBlock Text="{Binding Body.Kind}" FontSize="11"
+                               Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
+                  </StackPanel>
                   <TextBlock Text="{Binding DeadLetterReason}" FontSize="11"
                              Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" />
                 </StackPanel>

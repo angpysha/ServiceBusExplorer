@@ -9,18 +9,31 @@ namespace ServiceBusExplorer.ViewModels;
 public class QueueDetailViewModel : ReactiveObject
 {
     private readonly IQueueService _svc;
+    private readonly IMessageBrowseService _browseService;
+    private readonly IMessageReceiveService _receiveService;
+    private readonly IPurgeService _purgeService;
+    private readonly IConfirmationService _confirmationService;
+    private readonly Func<string, Task> _copyToClipboard;
     private readonly string _queueName;
+    private CancellationTokenSource? _purgeCts;
     private readonly Subject<Unit> _navigateBack = new();
-    private readonly SourceList<ReceivedMessage> _messageSource = new();
+    private readonly SourceList<ObservedMessage> _observedSource = new();
+    private readonly SourceList<ReceivedMessage> _receivedSource = new();
     private QueueInfo? _queue;
     private bool _isLoading;
     private string? _error;
     private ReceivedMessage? _selectedMessage;
+    private ObservedMessage? _selectedObservedMessage;
     private int _peekCount = 20;
-    private MessageSubQueue _selectedSubQueue = MessageSubQueue.None;
+    private MessageSource? _selectedSource;
     private bool _showSendPanel;
     private bool _isReceiveMode;
     private IReceiveSession? _activeSession;
+    private SessionContext? _sessionContext;
+    private string? _requestedSessionId;
+    private SourceAvailability _browseAvailability = SourceAvailability.Empty;
+    private BrowseContinuation? _browseContinuation;
+    private bool _userAcceptedSensitiveCopy;
 
     // Editable fields
     private int _maxDeliveryCount;
@@ -34,6 +47,10 @@ public class QueueDetailViewModel : ReactiveObject
     private string? _userMetadata;
     private bool _isSaving;
     private string? _saveError;
+    private string? _settlementStatus;
+    private string? _purgeStatus;
+    private bool _isPurging;
+    private OperationOutcomeKind? _purgeOutcomeKind;
 
     public QueueInfo? Queue
     {
@@ -57,10 +74,119 @@ public class QueueDetailViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _error, value);
     }
 
+    /// <summary>
+    /// Last settlement outcome presentation (success, rejected ineligible, or failure).
+    /// </summary>
+    public string? SettlementStatus
+    {
+        get => _settlementStatus;
+        private set => this.RaiseAndSetIfChanged(ref _settlementStatus, value);
+    }
+
+    /// <summary>
+    /// Last purge operation presentation (loading, succeeded, cancelled, partial, or failure).
+    /// </summary>
+    public string? PurgeStatus
+    {
+        get => _purgeStatus;
+        private set => this.RaiseAndSetIfChanged(ref _purgeStatus, value);
+    }
+
+    /// <summary>
+    /// True while a confirmed purge is in progress.
+    /// </summary>
+    public bool IsPurging
+    {
+        get => _isPurging;
+        private set => this.RaiseAndSetIfChanged(ref _isPurging, value);
+    }
+
+    /// <summary>
+    /// Kind of the last purge <see cref="OperationOutcome"/>, when any.
+    /// </summary>
+    public OperationOutcomeKind? PurgeOutcomeKind
+    {
+        get => _purgeOutcomeKind;
+        private set => this.RaiseAndSetIfChanged(ref _purgeOutcomeKind, value);
+    }
+
+    public bool IsPurgeCancelled => PurgeOutcomeKind == OperationOutcomeKind.Cancelled;
+    public bool IsPurgePartial => PurgeOutcomeKind == OperationOutcomeKind.Partial;
+    public bool IsPurgeFailed => PurgeOutcomeKind == OperationOutcomeKind.Failed;
+    public bool IsPurgeSucceeded => PurgeOutcomeKind == OperationOutcomeKind.Succeeded;
+
+    /// <summary>
+    /// True when the selected peek-locked message is currently eligible to settle.
+    /// </summary>
+    public bool CanSettleSelectedMessage =>
+        _activeSession is not null
+        && SelectedMessage is not null
+        && CanOperateSessionMessages
+        && SettlementStateMachine.CanSettle(_activeSession.GetSettlementState(SelectedMessage));
+
+    /// <summary>True when session ownership allows receive/settle work.</summary>
+    public bool CanOperateSessionMessages =>
+        SessionContext is null || SessionContext.CanOperateMessages(DateTimeOffset.UtcNow);
+
+    /// <summary>True for session-enabled queues.</summary>
+    public bool RequiresSessionEntity => Queue?.RequiresSession ?? false;
+
+    /// <summary>Current session ownership state for session-enabled receive.</summary>
+    public SessionContext? SessionContext
+    {
+        get => _sessionContext;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _sessionContext, value);
+            this.RaisePropertyChanged(nameof(SessionStatus));
+            this.RaisePropertyChanged(nameof(IsSessionLockVisible));
+            this.RaisePropertyChanged(nameof(CanOperateSessionMessages));
+            this.RaisePropertyChanged(nameof(CanReacquireSession));
+            this.RaisePropertyChanged(nameof(CanSettleSelectedMessage));
+        }
+    }
+
+    /// <summary>Operator-entered session id for specific acquisition.</summary>
+    public string? RequestedSessionId
+    {
+        get => _requestedSessionId;
+        set => this.RaiseAndSetIfChanged(ref _requestedSessionId, value);
+    }
+
+    /// <summary>Operator-safe session ownership status.</summary>
+    public string? SessionStatus => SessionContext?.StatusMessage;
+
+    /// <summary>True when accepted session lock expiry is visible.</summary>
+    public bool IsSessionLockVisible => SessionContext?.IsLockVisible ?? false;
+
+    /// <summary>True after session loss, release, or fault.</summary>
+    public bool CanReacquireSession => SessionContext?.CanReacquire ?? false;
+
+    /// <summary>
+    /// Peeked browse messages are never settleable.
+    /// </summary>
+    public bool CanSettleSelectedObservedMessage =>
+        SelectedObservedMessage is not null
+        && SelectedObservedMessage.IsSettleableAt(DateTimeOffset.UtcNow);
+
     public ReceivedMessage? SelectedMessage
     {
         get => _selectedMessage;
-        set => this.RaiseAndSetIfChanged(ref _selectedMessage, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedMessage, value);
+            this.RaisePropertyChanged(nameof(CanSettleSelectedMessage));
+        }
+    }
+
+    public ObservedMessage? SelectedObservedMessage
+    {
+        get => _selectedObservedMessage;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedObservedMessage, value);
+            this.RaisePropertyChanged(nameof(CanSettleSelectedObservedMessage));
+        }
     }
 
     public int PeekCount
@@ -69,10 +195,24 @@ public class QueueDetailViewModel : ReactiveObject
         set => this.RaiseAndSetIfChanged(ref _peekCount, value);
     }
 
-    public MessageSubQueue SelectedSubQueue
+    public MessageSource? SelectedSource
     {
-        get => _selectedSubQueue;
-        set => this.RaiseAndSetIfChanged(ref _selectedSubQueue, value);
+        get => _selectedSource;
+        set => this.RaiseAndSetIfChanged(ref _selectedSource, value);
+    }
+
+    public SourceAvailability BrowseAvailability
+    {
+        get => _browseAvailability;
+        private set => this.RaiseAndSetIfChanged(ref _browseAvailability, value);
+    }
+
+    public bool HasMoreObservedMessages => _browseContinuation is not null;
+
+    public bool UserAcceptedSensitiveCopy
+    {
+        get => _userAcceptedSensitiveCopy;
+        private set => this.RaiseAndSetIfChanged(ref _userAcceptedSensitiveCopy, value);
     }
 
     public bool ShowSendPanel
@@ -143,9 +283,10 @@ public class QueueDetailViewModel : ReactiveObject
         private set => this.RaiseAndSetIfChanged(ref _saveError, value);
     }
 
-    public static IReadOnlyList<MessageSubQueue> SubQueueOptions { get; } =
-        new[] { MessageSubQueue.None, MessageSubQueue.DeadLetter, MessageSubQueue.TransferDeadLetter };
+    public static IReadOnlyList<MessageSource> SourceOptions { get; } =
+        Enum.GetValues<MessageSource>();
 
+    public ReadOnlyObservableCollection<ObservedMessage> ObservedMessages { get; }
     public ReadOnlyObservableCollection<ReceivedMessage> Messages { get; }
     public SendMessageViewModel Send { get; }
 
@@ -153,25 +294,52 @@ public class QueueDetailViewModel : ReactiveObject
     public ReactiveCommand<Unit, Unit> NavigateBackCommand { get; }
     public ReactiveCommand<Unit, Unit> RefreshInfoCommand { get; }
     public ReactiveCommand<Unit, Unit> PeekCommand { get; }
+    public ReactiveCommand<Unit, Unit> LoadMoreObservedCommand { get; }
     public ReactiveCommand<Unit, Unit> PurgeCommand { get; }
+    public ReactiveCommand<Unit, Unit> CancelPurgeCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleSendPanelCommand { get; }
     public ReactiveCommand<Unit, Unit> UpdateCommand { get; }
     public ReactiveCommand<Unit, Unit> StartReceiveCommand { get; }
     public ReactiveCommand<Unit, Unit> StopReceiveCommand { get; }
+    public ReactiveCommand<Unit, Unit> AcceptNextSessionCommand { get; }
+    public ReactiveCommand<Unit, Unit> AcceptSpecificSessionCommand { get; }
+    public ReactiveCommand<Unit, Unit> ReacquireSessionCommand { get; }
     public ReactiveCommand<Unit, Unit> ReceiveBatchCommand { get; }
+    public ReactiveCommand<Unit, Unit> ReceiveAndDeleteCommand { get; }
+    public ReactiveCommand<Unit, Unit> CopyObservedBodyCommand { get; }
+    public ReactiveCommand<Unit, Unit> ExportObservedBodyCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> CompleteCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> AbandonCommand { get; }
+    public ReactiveCommand<ReceivedMessage, Unit> DeferCommand { get; }
     public ReactiveCommand<ReceivedMessage, Unit> DeadLetterCommand { get; }
 
-    public QueueDetailViewModel(IQueueService svc, string queueName)
+    public QueueDetailViewModel(
+        IQueueService svc,
+        IMessageBrowseService browseService,
+        IMessageSendService sendService,
+        IMessageReceiveService receiveService,
+        IPurgeService purgeService,
+        IConfirmationService confirmationService,
+        string queueName,
+        Func<string, Task>? copyToClipboard = null)
     {
         _svc = svc;
+        _browseService = browseService;
+        _receiveService = receiveService;
+        _purgeService = purgeService;
+        _confirmationService = confirmationService;
+        _copyToClipboard = copyToClipboard ?? (_ => Task.CompletedTask);
         _queueName = queueName;
 
-        _messageSource.Connect().Bind(out var bound).Subscribe();
-        Messages = bound;
+        _observedSource.Connect().Bind(out var observedBound).Subscribe();
+        ObservedMessages = observedBound;
 
-        Send = new SendMessageViewModel(svc, queueName);
+        _receivedSource.Connect().Bind(out var receivedBound).Subscribe();
+        Messages = receivedBound;
+
+        Send = new SendMessageViewModel(
+            sendService,
+            new SendTargetContext(SendTargetKind.Queue, queueName, queueName));
 
         NavigateBackCommand = ReactiveCommand.Create(() => _navigateBack.OnNext(Unit.Default));
         ToggleSendPanelCommand = ReactiveCommand.Create(() => { ShowSendPanel = !ShowSendPanel; });
@@ -196,41 +364,89 @@ public class QueueDetailViewModel : ReactiveObject
 
         PeekCommand = ReactiveCommand.CreateFromTask(async () =>
         {
+            await BrowseAsync(append: false);
+        });
+
+        LoadMoreObservedCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await BrowseAsync(append: true);
+        }, this.WhenAnyValue(x => x.HasMoreObservedMessages));
+
+        PurgeCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedSource is not { } source)
+            {
+                Error = "Select a message source before purging.";
+                PurgeStatus = Error;
+                PurgeOutcomeKind = OperationOutcomeKind.Failed;
+                RaisePurgeKindFlags();
+                return;
+            }
+
+            var confirmation = await _confirmationService.ConfirmAsync(
+                new ConfirmationRequest(
+                    _queueName,
+                    source,
+                    "All messages in this source will be permanently removed.",
+                    ConfirmationRisk.Irreversible,
+                    ConfirmActionLabel: "Purge"));
+            if (confirmation != ConfirmationResult.Confirmed)
+            {
+                PurgeStatus = "Purge cancelled — no messages were removed.";
+                PurgeOutcomeKind = OperationOutcomeKind.Cancelled;
+                RaisePurgeKindFlags();
+                return;
+            }
+
+            _purgeCts?.Dispose();
+            _purgeCts = new CancellationTokenSource();
+            IsPurging = true;
             IsLoading = true;
             Error = null;
+            PurgeStatus = $"Purging {_queueName} ({source})…";
+            PurgeOutcomeKind = null;
+            this.RaisePropertyChanged(nameof(IsPurgeCancelled));
+            this.RaisePropertyChanged(nameof(IsPurgePartial));
+            this.RaisePropertyChanged(nameof(IsPurgeFailed));
+            this.RaisePropertyChanged(nameof(IsPurgeSucceeded));
+
             try
             {
-                var msgs = await _svc.PeekAsync(_queueName, PeekCount, SelectedSubQueue);
-                _messageSource.Edit(list => { list.Clear(); list.AddRange(msgs); });
+                var outcome = await _purgeService.PurgeAsync(
+                    new EntityAddress(_queueName),
+                    source,
+                    _purgeCts.Token);
+
+                ApplyPurgeOutcome(outcome);
+                if (outcome.Kind is OperationOutcomeKind.Succeeded or OperationOutcomeKind.Partial)
+                {
+                    _observedSource.Clear();
+                    _receivedSource.Clear();
+                    _browseContinuation = null;
+                    this.RaisePropertyChanged(nameof(HasMoreObservedMessages));
+                }
             }
             catch (Exception ex)
             {
                 Error = ex.Message;
+                PurgeStatus = $"Purge failed: {ex.Message}";
+                PurgeOutcomeKind = OperationOutcomeKind.Failed;
+                RaisePurgeKindFlags();
             }
             finally
             {
+                IsPurging = false;
                 IsLoading = false;
             }
         });
 
-        PurgeCommand = ReactiveCommand.CreateFromTask(async () =>
-        {
-            IsLoading = true;
-            Error = null;
-            try
+        CancelPurgeCommand = ReactiveCommand.Create(
+            () =>
             {
-                await _svc.PurgeAsync(_queueName, SelectedSubQueue);
-                _messageSource.Clear();
-            }
-            catch (Exception ex)
-            {
-                Error = ex.Message;
-            }
-            finally
-            {
-                IsLoading = false;
-            }
-        });
+                _purgeCts?.Cancel();
+                PurgeStatus = "Cancelling purge…";
+            },
+            this.WhenAnyValue(x => x.IsPurging));
 
         UpdateCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -251,7 +467,11 @@ public class QueueDetailViewModel : ReactiveObject
                     ForwardDeadLetteredMessagesTo = ForwardDeadLetteredMessagesTo,
                     UserMetadata = UserMetadata,
                 };
-                Queue = await _svc.UpdateAsync(updated);
+                var result = await _svc.UpdateAsync(updated);
+                if (result.IsSuccess && result.Entity is not null)
+                    Queue = result.Entity;
+                else
+                    SaveError = result.SafeMessage;
             }
             catch (Exception ex)
             {
@@ -264,7 +484,7 @@ public class QueueDetailViewModel : ReactiveObject
         });
 
         var hasSession = this.WhenAnyValue(x => x.IsReceiveMode);
-        var noSession  = this.WhenAnyValue(x => x.IsReceiveMode, m => !m);
+        var noSession = this.WhenAnyValue(x => x.IsReceiveMode, m => !m);
 
         StartReceiveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -272,8 +492,23 @@ public class QueueDetailViewModel : ReactiveObject
             Error = null;
             try
             {
-                _activeSession = await _svc.OpenReceiveSessionAsync(_queueName, SelectedSubQueue);
-                _messageSource.Clear();
+                if (SelectedSource is not { } source)
+                {
+                    Error = "Select a message source before receiving.";
+                    return;
+                }
+
+                if (RequiresSessionEntity)
+                {
+                    Error = "Use Accept next session or Accept specific session for session-enabled queues.";
+                    return;
+                }
+
+                _activeSession = await _receiveService.OpenPeekLockAsync(
+                    new EntityAddress(_queueName),
+                    source);
+                SessionContext = null;
+                _receivedSource.Clear();
                 IsReceiveMode = true;
             }
             catch (Exception ex)
@@ -286,6 +521,25 @@ public class QueueDetailViewModel : ReactiveObject
             }
         }, noSession);
 
+        AcceptNextSessionCommand = ReactiveCommand.CreateFromTask(
+            () => AcquireSessionAsync(new SessionRequest()),
+            noSession);
+
+        AcceptSpecificSessionCommand = ReactiveCommand.CreateFromTask(
+            () => AcquireSessionAsync(new SessionRequest(RequestedSessionId)),
+            this.WhenAnyValue(
+                x => x.IsReceiveMode,
+                x => x.RequestedSessionId,
+                (receiveMode, sessionId) => !receiveMode && !string.IsNullOrWhiteSpace(sessionId)));
+
+        ReacquireSessionCommand = ReactiveCommand.CreateFromTask(
+            () => AcquireSessionAsync(
+                new SessionRequest(
+                    string.IsNullOrWhiteSpace(RequestedSessionId)
+                        ? SessionContext?.RequestedSessionId
+                        : RequestedSessionId)),
+            this.WhenAnyValue(x => x.CanReacquireSession));
+
         StopReceiveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (_activeSession != null)
@@ -293,18 +547,74 @@ public class QueueDetailViewModel : ReactiveObject
                 await _activeSession.DisposeAsync();
                 _activeSession = null;
             }
+
+            if (SessionContext is not null)
+            {
+                SessionContext = SessionContext.MarkReleased();
+            }
+
             IsReceiveMode = false;
         }, hasSession);
 
         ReceiveBatchCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (_activeSession == null) return;
+            if (!CanOperateSessionMessages)
+            {
+                SyncSessionContext();
+                Error = SessionContext?.StatusMessage ?? "Session is not ready for message operations.";
+                return;
+            }
+
             IsLoading = true;
             Error = null;
             try
             {
                 var msgs = await _activeSession.ReceiveBatchAsync(PeekCount);
-                _messageSource.AddRange(msgs);
+                _receivedSource.AddRange(msgs);
+                SyncSessionContext();
+            }
+            catch (Exception ex)
+            {
+                SyncSessionContext();
+                Error = ex.Message;
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }, hasSession);
+
+        ReceiveAndDeleteCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedSource is not { } source)
+            {
+                Error = "Select a message source before receive-and-delete.";
+                return;
+            }
+
+            var address = new EntityAddress(_queueName);
+            var decision = await _confirmationService.ConfirmAsync(
+                new ConfirmationRequest(
+                    _queueName,
+                    source,
+                    "Messages will be permanently removed from the broker and may not be fully displayable after deletion.",
+                    ConfirmationRisk.Irreversible));
+
+            if (!ReceiveAndDeleteConfirmation.TryCreate(decision, address, source, out var confirmation)
+                || confirmation is null)
+            {
+                return;
+            }
+
+            IsLoading = true;
+            Error = null;
+            try
+            {
+                var result = await _receiveService.ReceiveAndDeleteAsync(
+                    new ConfirmedReceiveAndDeleteRequest(confirmation, PeekCount));
+                _receivedSource.Clear();
+                _receivedSource.AddRange(result.Messages);
             }
             catch (Exception ex)
             {
@@ -314,52 +624,246 @@ public class QueueDetailViewModel : ReactiveObject
             {
                 IsLoading = false;
             }
-        }, hasSession);
-
-        CompleteCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
-        {
-            if (_activeSession == null) return;
-            try
-            {
-                await _activeSession.CompleteAsync(msg);
-                _messageSource.Remove(msg);
-            }
-            catch (Exception ex)
-            {
-                Error = ex.Message;
-            }
         });
 
-        AbandonCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
-        {
-            if (_activeSession == null) return;
-            try
-            {
-                await _activeSession.AbandonAsync(msg);
-                _messageSource.Remove(msg);
-            }
-            catch (Exception ex)
-            {
-                Error = ex.Message;
-            }
-        });
+        CopyObservedBodyCommand = ReactiveCommand.CreateFromTask(CopySelectedObservedBodyAsync);
+        ExportObservedBodyCommand = ReactiveCommand.CreateFromTask(ExportSelectedObservedBodyAsync);
 
-        DeadLetterCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(async msg =>
-        {
-            if (_activeSession == null) return;
-            try
-            {
-                await _activeSession.DeadLetterAsync(msg);
-                _messageSource.Remove(msg);
-            }
-            catch (Exception ex)
-            {
-                Error = ex.Message;
-            }
-        });
+        CompleteCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(msg =>
+            SettleReceivedAsync(msg, SettlementAction.Complete));
+        AbandonCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(msg =>
+            SettleReceivedAsync(msg, SettlementAction.Abandon));
+        DeferCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(msg =>
+            SettleReceivedAsync(msg, SettlementAction.Defer));
+        DeadLetterCommand = ReactiveCommand.CreateFromTask<ReceivedMessage>(msg =>
+            SettleReceivedAsync(msg, SettlementAction.DeadLetter));
 
         RefreshInfoCommand.Execute().Subscribe();
     }
+
+    private async Task AcquireSessionAsync(SessionRequest request)
+    {
+        if (SelectedSource is not { } source)
+        {
+            Error = "Select a message source before accepting a session.";
+            return;
+        }
+
+        IsLoading = true;
+        Error = null;
+        var context = SessionContext.BeginAcquisition(new EntityAddress(_queueName), source, request);
+        SessionContext = context;
+        try
+        {
+            _activeSession = await _receiveService.OpenPeekLockAsync(
+                new EntityAddress(_queueName),
+                source,
+                request);
+            SessionContext = context.SyncFromReceiveSession(_activeSession, DateTimeOffset.UtcNow);
+            _receivedSource.Clear();
+            IsReceiveMode = true;
+        }
+        catch (OperationCanceledException)
+        {
+            SessionContext = context.MarkCancelled();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            SessionContext = context.MarkFaulted(ex.Message);
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void SyncSessionContext()
+    {
+        if (_activeSession is null || SessionContext is null)
+        {
+            return;
+        }
+
+        SessionContext = SessionContext.SyncFromReceiveSession(_activeSession, DateTimeOffset.UtcNow);
+    }
+
+    private async Task SettleReceivedAsync(ReceivedMessage msg, SettlementAction action)
+    {
+        if (_activeSession is null)
+        {
+            SettlementStatus = "No active peek-lock session.";
+            return;
+        }
+
+        if (!CanOperateSessionMessages)
+        {
+            SyncSessionContext();
+            SettlementStatus = SessionContext?.StatusMessage ?? "Session is not ready for message operations.";
+            return;
+        }
+
+        if (SelectedObservedMessage is { } observed
+            && (observed.ReceiveKind == MessageReceiveKind.Peeked
+                || observed.SettlementState == SettlementState.Peeked)
+            && string.Equals(observed.MessageId, msg.MessageId, StringComparison.Ordinal))
+        {
+            var rejected = _receiveService.RejectPeekedSettlement(observed, action);
+            SettlementStatus = rejected.SafeMessage;
+            this.RaisePropertyChanged(nameof(CanSettleSelectedObservedMessage));
+            return;
+        }
+
+        try
+        {
+            var outcome = action switch
+            {
+                SettlementAction.Complete =>
+                    await _receiveService.CompleteAsync(_activeSession, msg),
+                SettlementAction.Abandon =>
+                    await _receiveService.AbandonAsync(_activeSession, msg),
+                SettlementAction.Defer =>
+                    await _receiveService.DeferAsync(_activeSession, msg),
+                SettlementAction.DeadLetter =>
+                    await _receiveService.DeadLetterAsync(_activeSession, msg),
+                _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
+            };
+
+            SettlementStatus = outcome.SafeMessage;
+            if (outcome.Result == SettlementResultKind.Succeeded)
+            {
+                _receivedSource.Remove(msg);
+            }
+
+            SyncSessionContext();
+            this.RaisePropertyChanged(nameof(CanSettleSelectedMessage));
+        }
+        catch (Exception ex)
+        {
+            SyncSessionContext();
+            Error = ex.Message;
+            SettlementStatus = ex.Message;
+        }
+    }
+
+    private void ApplyPurgeOutcome(OperationOutcome outcome)
+    {
+        PurgeOutcomeKind = outcome.Kind;
+        PurgeStatus = outcome.SafeMessage;
+        if (outcome.Kind is OperationOutcomeKind.Failed or OperationOutcomeKind.Partial)
+            Error = outcome.SafeMessage;
+        else
+            Error = null;
+        RaisePurgeKindFlags();
+    }
+
+    private void RaisePurgeKindFlags()
+    {
+        this.RaisePropertyChanged(nameof(IsPurgeCancelled));
+        this.RaisePropertyChanged(nameof(IsPurgePartial));
+        this.RaisePropertyChanged(nameof(IsPurgeFailed));
+        this.RaisePropertyChanged(nameof(IsPurgeSucceeded));
+    }
+
+    private async Task BrowseAsync(bool append)
+    {
+        IsLoading = true;
+        Error = null;
+        try
+        {
+            if (SelectedSource is not { } source)
+            {
+                Error = "Select a message source before peeking.";
+                return;
+            }
+
+            var fromSequence = append ? _browseContinuation?.FromSequenceNumber : null;
+            var result = await _browseService.PeekAsync(
+                new EntityAddress(_queueName),
+                source,
+                new PageRequest(PeekCount, fromSequence));
+
+            BrowseAvailability = result.Availability;
+            _browseContinuation = result.Continuation;
+            this.RaisePropertyChanged(nameof(HasMoreObservedMessages));
+
+            if (!append)
+            {
+                _observedSource.Edit(list =>
+                {
+                    list.Clear();
+                    list.AddRange(result.Messages);
+                });
+                UserAcceptedSensitiveCopy = false;
+            }
+            else
+            {
+                _observedSource.AddRange(result.Messages);
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task CopySelectedObservedBodyAsync()
+    {
+        if (SelectedObservedMessage is not { } message)
+            return;
+
+        if (!await ConfirmSensitiveCopyAsync())
+            return;
+
+        var text = GetCopyableBodyText(message);
+        if (text is null)
+            return;
+
+        await _copyToClipboard(text);
+        UserAcceptedSensitiveCopy = true;
+    }
+
+    private async Task ExportSelectedObservedBodyAsync()
+    {
+        if (SelectedObservedMessage is not { } message)
+            return;
+
+        if (!await ConfirmSensitiveCopyAsync())
+            return;
+
+        var text = GetCopyableBodyText(message);
+        if (text is null)
+            return;
+
+        await _copyToClipboard(text);
+        UserAcceptedSensitiveCopy = true;
+    }
+
+    private async Task<bool> ConfirmSensitiveCopyAsync()
+    {
+        if (SelectedSource is not { } source)
+            return false;
+
+        return await SensitiveContentCopy.ConfirmAsync(
+            _confirmationService,
+            _queueName,
+            source);
+    }
+
+    private static string? GetCopyableBodyText(ObservedMessage message) =>
+        message.Body.Kind switch
+        {
+            MessageBodyKind.Empty => message.Body.DisplayText,
+            MessageBodyKind.Unavailable => null,
+            MessageBodyKind.Binary => message.Body.DisplayText,
+            MessageBodyKind.Truncated => message.Body.DisplayText,
+            _ => message.Body.DisplayText
+        };
 
     private void PopulateEditableFields(QueueInfo q)
     {

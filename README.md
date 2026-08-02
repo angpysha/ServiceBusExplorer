@@ -35,6 +35,56 @@ It is strongly recommended to set `Configuration File for Settings and Connectio
 >
 > Do not overwite the new configuration file with the old file since the `runtime` section in the new must file not be modified. 
 
+## Preview installers (Avalonia / .NET 10)
+
+Evaluator-facing packages for the modern Avalonia app:
+
+| OS | Primary artifact | Notes |
+|----|------------------|-------|
+| Windows x64 | **Unsigned MSI** (`scripts/package-windows-msi.ps1`) | Dual per-user / per-machine; SmartScreen “Unknown publisher” is expected |
+| macOS **Apple Silicon only** | **Notarized DMG** (`scripts/package-macos-internal.sh` + fastlane) | `osx-arm64` only; Intel deferred |
+| Linux x64 | `tar.gz` (`scripts/publish-preview.ps1 -Rids linux-x64`) | See Secret Service notes in docs |
+
+Full steps, VM install/uninstall checklist, Gatekeeper, and secrets tables:
+[`docs/preview-installation.md`](docs/preview-installation.md).  
+Maintainer CI runbook (workflow trigger, jobs, Environment `macos-notarize`, secret names):
+[`packaging/README.md`](packaging/README.md).
+
+### Windows MSI (unsigned)
+
+```powershell
+pwsh ./scripts/package-windows-msi.ps1   # Windows host + WiX v4+
+```
+
+Preview MSIs are **not** Authenticode-signed. Windows may show SmartScreen / unknown-publisher
+warnings — expected for this feature.
+
+### macOS DMG (Apple Silicon + fastlane notarize)
+
+```bash
+RID=osx-arm64 ./scripts/package-macos-internal.sh
+# With Developer ID + ASC API key (CI via scripts/ci/import-apple-signing.sh):
+NOTARIZE=1 RID=osx-arm64 ./scripts/package-macos-internal.sh
+```
+
+Pipeline order: **sign → DMG → fastlane notarize** (fail-closed if secrets missing).
+No Mac App Store provisioning profile.
+
+### GitHub Actions
+
+Workflow: [`.github/workflows/preview-packages.yml`](.github/workflows/preview-packages.yml)
+
+- Manual: **Actions → preview-packages → Run workflow**
+- Required macOS notarize secrets (names only): see
+  [`specs/002-preview-installer-packaging/contracts/github-secrets.md`](specs/002-preview-installer-packaging/contracts/github-secrets.md)
+  (`MACOS_CERTIFICATE_*`, `KEYCHAIN_PASSWORD`, `APP_STORE_CONNECT_API_KEY_*`)
+
+Linux archive only:
+
+```powershell
+pwsh ./scripts/publish-preview.ps1 -Rids linux-x64
+```
+
 ## Using [Chocolatey](https://chocolatey.org/install)
 
 ### Installing for the first time

@@ -23,13 +23,13 @@ public sealed class HexColorConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// Shows a human-readable namespace name instead of the raw connection string.
+/// Shows the label from non-secret connection profile metadata.
 public sealed class ConnectionStringLabelConverter : IValueConverter
 {
     public static readonly ConnectionStringLabelConverter Instance = new();
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value is string cs ? SettingsService.GetDisplayLabel(cs) : value?.ToString() ?? "";
+        => value is ConnectionProfile profile ? profile.Label : value?.ToString() ?? "";
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

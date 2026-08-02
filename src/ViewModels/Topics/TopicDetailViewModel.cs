@@ -7,6 +7,10 @@ namespace ServiceBusExplorer.ViewModels;
 public class TopicDetailViewModel : ReactiveObject
 {
     private readonly ITopicService _topicSvc;
+    private readonly IMessageBrowseService _browseService;
+    private readonly IMessageReceiveService _receiveService;
+    private readonly IPurgeService _purgeService;
+    private readonly IConfirmationService _confirmationService;
     private readonly string _topicName;
     private readonly Subject<Unit> _navigateBack = new();
     private TopicInfo? _topic;
@@ -106,13 +110,23 @@ public class TopicDetailViewModel : ReactiveObject
     public TopicDetailViewModel(
         ITopicService topicSvc,
         ISubscriptionService subscriptionSvc,
-        IQueueService queueSvc,
+        IMessageBrowseService browseService,
+        IMessageSendService sendService,
+        IMessageReceiveService receiveService,
+        IPurgeService purgeService,
+        IConfirmationService confirmationService,
         string topicName)
     {
         _topicSvc = topicSvc;
+        _browseService = browseService;
+        _receiveService = receiveService;
+        _purgeService = purgeService;
+        _confirmationService = confirmationService;
         _topicName = topicName;
         Subscriptions = new SubscriptionListViewModel(subscriptionSvc, topicName);
-        Send = new SendMessageViewModel(queueSvc, topicName);
+        Send = new SendMessageViewModel(
+            sendService,
+            new SendTargetContext(SendTargetKind.Topic, topicName, topicName));
 
         NavigateBackCommand = ReactiveCommand.Create(() => _navigateBack.OnNext(Unit.Default));
         ToggleSendPanelCommand = ReactiveCommand.Create(() => { ShowSendPanel = !ShowSendPanel; });
@@ -122,7 +136,15 @@ public class TopicDetailViewModel : ReactiveObject
             {
                 var detail = sub == null
                     ? null
-                    : new SubscriptionDetailViewModel(subscriptionSvc, queueSvc, topicName, sub.Name);
+                    : new SubscriptionDetailViewModel(
+                        subscriptionSvc,
+                        _browseService,
+                        sendService,
+                        _receiveService,
+                        _purgeService,
+                        _confirmationService,
+                        topicName,
+                        sub.Name);
                 if (detail != null)
                     detail.NavigateBackRequested.Subscribe(_ => Subscriptions.SelectedSubscription = null);
                 SelectedSubscriptionDetail = detail;
@@ -161,7 +183,11 @@ public class TopicDetailViewModel : ReactiveObject
                     EnableBatchedOperations = EnableBatchedOperations,
                     UserMetadata = UserMetadata,
                 };
-                Topic = await _topicSvc.UpdateAsync(updated);
+                var result = await _topicSvc.UpdateAsync(updated);
+                if (result.IsSuccess && result.Entity is not null)
+                    Topic = result.Entity;
+                else
+                    SaveError = result.SafeMessage;
             }
             catch (Exception ex)
             {

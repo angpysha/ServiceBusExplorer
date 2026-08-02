@@ -10,6 +10,11 @@ public record OutboundMessage(
     string? CorrelationId = null,
     string? SessionId = null,
     string? To = null,
+    string? Subject = null,
+    string? ReplyTo = null,
+    string? ReplyToSessionId = null,
+    string? PartitionKey = null,
+    TimeSpan? TimeToLive = null,
     IReadOnlyDictionary<string, object>? Properties = null,
     DateTimeOffset? ScheduledEnqueueTime = null);
 
