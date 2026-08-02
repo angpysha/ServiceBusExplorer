@@ -134,24 +134,49 @@ file "$APP_DIR/Contents/MacOS/$EXECUTABLE_NAME" | grep -Eq "$EXPECTED_ARCH|unive
 sign_bundle() {
   local identity="$1"
   local use_runtime="$2"
+  local macos_dir="$APP_DIR/Contents/MacOS"
+  local main_exe="$macos_dir/$EXECUTABLE_NAME"
+  local -a nested_files=()
+  local fname depth_key
 
-  while IFS= read -r -d '' fname; do
+  # Sign one path. Developer ID path keeps hardened runtime + timestamp + entitlements.
+  codesign_one() {
+    local target="$1"
     if [[ "$use_runtime" == "1" ]]; then
       codesign --force --timestamp --options=runtime \
         --entitlements "$ENTITLEMENTS" \
-        --sign "$identity" "$fname"
+        --sign "$identity" "$target"
     else
-      codesign --force --sign "$identity" "$fname"
+      codesign --force --sign "$identity" "$target"
     fi
-  done < <(find "$APP_DIR/Contents/MacOS" -type f -print0)
+  }
 
-  if [[ "$use_runtime" == "1" ]]; then
-    codesign --force --timestamp --options=runtime \
-      --entitlements "$ENTITLEMENTS" \
-      --sign "$identity" "$APP_DIR"
-  else
-    codesign --force --sign "$identity" "$APP_DIR"
+  # .NET self-contained apps must be signed inside-out:
+  #   1) nested MacOS files (deepest-first), excluding the main executable
+  #   2) Contents/MacOS/$EXECUTABLE_NAME
+  #   3) the outer .app bundle
+  # Do not rely on codesign --deep as the only signing pass (Avalonia/Apple guidance).
+  # --deep is used below for verification only.
+  while IFS= read -r -d '' fname; do
+    [[ "$fname" == "$main_exe" ]] && continue
+    nested_files+=("$fname")
+  done < <(find "$macos_dir" -type f -print0)
+
+  if ((${#nested_files[@]} > 0)); then
+    while IFS=$'\t' read -r depth_key fname; do
+      [[ -n "$fname" ]] || continue
+      codesign_one "$fname"
+    done < <(
+      for fname in "${nested_files[@]}"; do
+        depth_key="${fname//[^\/]/}"
+        # Lower sort key => deeper path (more slashes).
+        printf '%03d\t%s\n' "$((999 - ${#depth_key}))" "$fname"
+      done | LC_ALL=C sort
+    )
   fi
+
+  codesign_one "$main_exe"
+  codesign_one "$APP_DIR"
 
   codesign --verify --deep --strict --verbose=1 "$APP_DIR"
 }
