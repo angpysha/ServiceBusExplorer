@@ -11,6 +11,8 @@ namespace ServiceBusExplorer.Services;
 /// </summary>
 public sealed class ConnectionContextFactory : IConnectionContextFactory
 {
+    private const int EmulatorAdministrationPort = 5300;
+
     private readonly ICredentialVault _vault;
     private readonly IConnectionProbe? _probeOverride;
     private readonly Func<ConnectionRequest, TokenCredential>? _tokenCredentialFactory;
@@ -68,10 +70,13 @@ public sealed class ConnectionContextFactory : IConnectionContextFactory
             if (request.AuthMode == ServiceBusAuthMode.Sas)
             {
                 var connectionString = resolvedCredential!.Reveal();
-                client = new ServiceBusClient(connectionString);
+                var messagingConnectionString = ResolveMessagingConnectionString(connectionString);
+                client = new ServiceBusClient(messagingConnectionString);
                 if (request.Scope == ConnectionScope.Namespace)
                 {
-                    adminClient = new ServiceBusAdministrationClient(connectionString);
+                    var administrationConnectionString =
+                        ResolveAdministrationConnectionString(connectionString);
+                    adminClient = new ServiceBusAdministrationClient(administrationConnectionString);
                     probe = _probeOverride ?? new AdministrationClientConnectionProbe(adminClient);
                 }
                 else
@@ -202,7 +207,11 @@ public sealed class ConnectionContextFactory : IConnectionContextFactory
         if (string.IsNullOrWhiteSpace(request.NamespaceEndpoint))
             return "A Service Bus namespace endpoint is required.";
 
-        if (!TryNormalizeNamespace(request.NamespaceEndpoint, out _))
+        var allowDevelopmentEmulatorHost =
+            request.AuthMode == ServiceBusAuthMode.Sas &&
+            HasDevelopmentEmulatorFlag(request.SasCredential);
+
+        if (!TryNormalizeNamespace(request.NamespaceEndpoint, allowDevelopmentEmulatorHost, out _))
             return "The namespace endpoint must be a canonical Service Bus host without credentials.";
 
         if (request.AuthMode is not (ServiceBusAuthMode.Sas or ServiceBusAuthMode.AzureActiveDirectory))
@@ -225,11 +234,14 @@ public sealed class ConnectionContextFactory : IConnectionContextFactory
     }
 
     private static string NormalizeNamespace(string endpoint) =>
-        TryNormalizeNamespace(endpoint, out var normalized)
+        TryNormalizeNamespace(endpoint, allowDevelopmentEmulatorHost: true, out var normalized)
             ? normalized
             : endpoint.Trim();
 
-    private static bool TryNormalizeNamespace(string endpoint, out string normalized)
+    private static bool TryNormalizeNamespace(
+        string endpoint,
+        bool allowDevelopmentEmulatorHost,
+        out string normalized)
     {
         normalized = string.Empty;
         if (string.IsNullOrWhiteSpace(endpoint))
@@ -241,11 +253,10 @@ public sealed class ConnectionContextFactory : IConnectionContextFactory
             if (!string.IsNullOrEmpty(uri.UserInfo))
                 return false;
 
-            var host = uri.Host;
-            if (!host.EndsWith(".servicebus.windows.net", StringComparison.OrdinalIgnoreCase))
+            if (!IsAllowedNamespaceHost(uri.Host, allowDevelopmentEmulatorHost))
                 return false;
 
-            normalized = host;
+            normalized = uri.Host;
             return true;
         }
 
@@ -253,11 +264,98 @@ public sealed class ConnectionContextFactory : IConnectionContextFactory
             trimmed = trimmed["sb://".Length..];
 
         trimmed = trimmed.TrimEnd('/');
-        if (!trimmed.EndsWith(".servicebus.windows.net", StringComparison.OrdinalIgnoreCase))
+        var host = trimmed;
+        var portSeparator = trimmed.IndexOf(':');
+        if (portSeparator >= 0)
+            host = trimmed[..portSeparator];
+
+        if (!IsAllowedNamespaceHost(host, allowDevelopmentEmulatorHost))
             return false;
 
-        normalized = trimmed;
+        normalized = host;
         return true;
+    }
+
+    private static bool IsAllowedNamespaceHost(string host, bool allowDevelopmentEmulatorHost) =>
+        host.EndsWith(".servicebus.windows.net", StringComparison.OrdinalIgnoreCase) ||
+        IsWellKnownDevelopmentEmulatorHost(host) ||
+        (allowDevelopmentEmulatorHost && !string.IsNullOrWhiteSpace(host));
+
+    private static bool IsWellKnownDevelopmentEmulatorHost(string host) =>
+        host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+        host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+        host.Equals("host.docker.internal", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasDevelopmentEmulatorFlag(SensitiveCredential? credential) =>
+        credential is not null &&
+        IsDevelopmentEmulatorConnectionString(credential.Reveal());
+
+    private static bool IsDevelopmentEmulatorConnectionString(string connectionString)
+    {
+        foreach (var part in connectionString.Split(
+                     ';',
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var segments = part.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (segments.Length == 2 &&
+                segments[0].Equals("UseDevelopmentEmulator", StringComparison.OrdinalIgnoreCase) &&
+                segments[1].Equals("true", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Messaging uses the emulator AMQP endpoint (no admin HTTP port).
+    /// </summary>
+    private static string ResolveMessagingConnectionString(string connectionString) =>
+        IsDevelopmentEmulatorConnectionString(connectionString)
+            ? RewriteEndpointPort(connectionString, port: null)
+            : connectionString;
+
+    /// <summary>
+    /// Administration uses the emulator HTTP endpoint (default port 5300).
+    /// </summary>
+    private static string ResolveAdministrationConnectionString(string connectionString) =>
+        IsDevelopmentEmulatorConnectionString(connectionString)
+            ? RewriteEndpointPort(connectionString, EmulatorAdministrationPort)
+            : connectionString;
+
+    private static string RewriteEndpointPort(string connectionString, int? port)
+    {
+        var parts = connectionString.Split(';');
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var trimmed = parts[i].Trim();
+            if (trimmed.Length == 0)
+                continue;
+
+            var separator = trimmed.IndexOf('=');
+            if (separator <= 0)
+                continue;
+
+            var key = trimmed[..separator].Trim();
+            if (!key.Equals("Endpoint", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var endpoint = trimmed[(separator + 1)..].Trim();
+            if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ||
+                string.IsNullOrWhiteSpace(uri.Host))
+            {
+                break;
+            }
+
+            var rewritten = port is null
+                ? $"sb://{uri.Host}/"
+                : $"sb://{uri.Host}:{port.Value}/";
+            parts[i] = $"Endpoint={rewritten}";
+            break;
+        }
+
+        return string.Join(';', parts);
     }
 
     private static TokenCredential CreateEntraCredential(ConnectionRequest request) =>
