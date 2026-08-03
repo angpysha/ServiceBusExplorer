@@ -175,6 +175,53 @@ public sealed class ConnectionContextFactoryTests
     }
 
     [Fact]
+    public async Task CreateAsync_LocalhostEmulatorEndpoint_SucceedsWithFakeProbe()
+    {
+        var probe = new FakeConnectionProbe { AdminProbeResult = true };
+        var factory = CreateFactory(new FakeCredentialVault(), probe);
+
+        using var credential = new SensitiveCredential(CreateEmulatorConnectionString());
+        var result = await factory.CreateAsync(
+            CreateSasRequest(endpoint: "localhost", credential: credential));
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Context);
+        Assert.Equal("localhost", result.Context!.NamespaceEndpoint);
+        Assert.True(result.Context.Capabilities.CanAdministerNamespace);
+        Assert.Equal(1, probe.AdminProbeCount);
+    }
+
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("127.0.0.1")]
+    [InlineData("host.docker.internal")]
+    [InlineData("sb://localhost:5300/")]
+    public async Task CreateAsync_WellKnownEmulatorHosts_PassValidation(string endpoint)
+    {
+        var factory = CreateFactory(new FakeCredentialVault(), new FakeConnectionProbe());
+
+        using var credential = new SensitiveCredential(CreateEmulatorConnectionString());
+        var result = await factory.CreateAsync(
+            CreateSasRequest(endpoint: endpoint, credential: credential));
+
+        Assert.True(result.Success, result.FailureMessage);
+    }
+
+    [Fact]
+    public async Task CreateAsync_NonServiceBusHostWithoutEmulatorFlag_ReturnsValidationFailure()
+    {
+        var factory = CreateFactory(new FakeCredentialVault(), new FakeConnectionProbe());
+
+        using var credential = new SensitiveCredential(CreateConnectionString());
+        var result = await factory.CreateAsync(
+            CreateSasRequest(endpoint: "not-a-servicebus-host.example", credential: credential));
+
+        Assert.False(result.Success);
+        Assert.Equal(ConnectionFailureCategory.Validation, result.FailureCategory);
+        Assert.Contains("canonical", result.FailureMessage!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task CreateAsync_CancelledBeforeProbe_ThrowsOperationCanceledException()
     {
         var probe = new FakeConnectionProbe
@@ -239,6 +286,12 @@ public sealed class ConnectionContextFactoryTests
     {
         const string keyField = "SharedAccess" + "Key";
         return $"Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=test;{keyField}={secret}";
+    }
+
+    private static string CreateEmulatorConnectionString(string secret = "SAS_KEY_VALUE")
+    {
+        const string keyField = "SharedAccess" + "Key";
+        return $"Endpoint=sb://localhost/;SharedAccessKeyName=RootManageSharedAccessKey;{keyField}={secret};UseDevelopmentEmulator=true;";
     }
 
     private sealed class FakeCredentialVault : ICredentialVault
