@@ -34,17 +34,17 @@ function Invoke-Case([string]$Name, [scriptblock]$Body) {
 Invoke-Case 'valid full preview manifest passes schema' {
     $m = [ordered]@{
         product                     = 'Service Bus Explorer'
-        version                     = '1.0.1'
+        version                     = '0.0.1-alpha'
         preview                     = 'true'
-        'artifact.windows.x64'      = 'ServiceBusExplorer-1.0.1-win-x64.msi'
+        'artifact.windows.x64'      = 'ServiceBusExplorer-0.0.1-alpha-win-x64.msi'
         'sha256.windows.x64'        = ('a' * 64)
         'signing.windows.x64'       = 'unsigned'
         'notarization.windows.x64'  = 'n/a'
-        'artifact.macos.arm64'      = 'ServiceBusExplorer-1.0.1-osx-arm64.dmg'
+        'artifact.macos.arm64'      = 'ServiceBusExplorer-0.0.1-alpha-osx-arm64.dmg'
         'sha256.macos.arm64'        = ('b' * 64)
         'signing.macos.arm64'       = 'developer-id'
         'notarization.macos.arm64'  = 'notarized'
-        'artifact.linux.x64'        = 'ServiceBusExplorer-1.0.1-linux-x64.tar.gz'
+        'artifact.linux.x64'        = 'ServiceBusExplorer-0.0.1-alpha-linux-x64.tar.gz'
         'sha256.linux.x64'          = ('c' * 64)
         'signing.linux.x64'         = 'unsigned'
         'notarization.linux.x64'    = 'n/a'
@@ -54,7 +54,7 @@ Invoke-Case 'valid full preview manifest passes schema' {
 }
 
 Invoke-Case 'missing product fails' {
-    $m = [ordered]@{ version = '1.0.1'; preview = 'true' }
+    $m = [ordered]@{ version = '0.0.1-alpha'; preview = 'true' }
     $r = Test-SbePreviewManifestSchema -Manifest $m
     Assert-False $r.Ok 'should fail without product'
 }
@@ -62,7 +62,7 @@ Invoke-Case 'missing product fails' {
 Invoke-Case 'windows signing must be unsigned' {
     $m = [ordered]@{
         product                = 'Service Bus Explorer'
-        version                = '1.0.1'
+        version                = '0.0.1-alpha'
         preview                = 'true'
         'signing.windows.x64'  = 'authenticode'
     }
@@ -73,7 +73,7 @@ Invoke-Case 'windows signing must be unsigned' {
 Invoke-Case 'notarized macos requires developer-id signing' {
     $m = [ordered]@{
         product                     = 'Service Bus Explorer'
-        version                     = '1.0.1'
+        version                     = '0.0.1-alpha'
         preview                     = 'true'
         'signing.macos.arm64'       = 'ad-hoc'
         'notarization.macos.arm64'  = 'notarized'
@@ -90,13 +90,13 @@ Invoke-Case 'round-trip write/read preserves keys' {
         Set-SbePreviewManifestArtifact `
             -ManifestPath $path `
             -PlatformKey 'linux.x64' `
-            -ArtifactFileName 'ServiceBusExplorer-1.0.1-linux-x64.tar.gz' `
+            -ArtifactFileName 'ServiceBusExplorer-0.0.1-alpha-linux-x64.tar.gz' `
             -Sha256 ('d' * 64) `
             -Signing 'unsigned' `
             -Notarization 'n/a' `
-            -Version '1.0.1'
+            -Version '0.0.1-alpha'
         $read = ConvertFrom-SbePreviewManifest -Path $path
-        Assert-True ($read['artifact.linux.x64'] -eq 'ServiceBusExplorer-1.0.1-linux-x64.tar.gz') 'artifact key'
+        Assert-True ($read['artifact.linux.x64'] -eq 'ServiceBusExplorer-0.0.1-alpha-linux-x64.tar.gz') 'artifact key'
         Assert-True ($read['sha256.linux.x64'] -eq ('d' * 64)) 'sha key'
         $r = Test-SbePreviewManifestSchema -Manifest $read -RequiredPlatformKeys @('linux.x64')
         Assert-True $r.Ok ("round-trip schema: $($r.Errors -join '; ')")
