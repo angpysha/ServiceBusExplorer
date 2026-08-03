@@ -42,17 +42,22 @@ Invoke-Case 'sign before DMG before notarize order documented in script' {
     Assert-True ($sh -match 'Sign → DMG first') 'sign→DMG comment'
     $signIdx = $sh.IndexOf('sign_bundle')
     $dmgIdx = $sh.IndexOf('hdiutil create')
-    $notaIdx = $sh.IndexOf('fastlane macos_notarize_dmg')
+    $notaIdx = $sh.IndexOf('xcrun notarytool submit')
+    $stapleIdx = $sh.IndexOf('xcrun stapler staple')
     Assert-True ($signIdx -ge 0 -and $dmgIdx -gt $signIdx) 'sign before dmg'
-    Assert-True ($notaIdx -gt $dmgIdx) 'fastlane notarize after dmg'
+    Assert-True ($notaIdx -gt $dmgIdx) 'notarytool after dmg'
+    Assert-True ($stapleIdx -gt $notaIdx) 'stapler after notarytool'
+    Assert-True ($sh -match 'Accepted') 'requires Accepted status'
+    Assert-True ($sh -match 'fail-closed|Fail-closed|fail closed') 'fail-closed semantics'
 }
 
-Invoke-Case 'Fastfile macos_notarize_dmg lane present' {
+Invoke-Case 'Fastfile optional lane uses notarytool not flaky notarize action' {
     Assert-True (Test-Path $fastfile) 'Fastfile missing'
     $ff = Get-Content -Raw $fastfile
     Assert-True ($ff -match 'lane :macos_notarize_dmg') 'lane'
-    Assert-True ($ff -match 'notarize\(') 'notarize action'
-    Assert-True ($ff -match 'com\.servicebusexplorer\.internal') 'bundle id'
+    Assert-True ($ff -match 'notarytool') 'notarytool'
+    Assert-True ($ff -match 'stapler') 'stapler'
+    Assert-True ($ff -notmatch '(?m)^\s*notarize\(') 'must not use fastlane notarize action'
 }
 
 Invoke-Case 'MANIFEST contract keys when artifacts present' {

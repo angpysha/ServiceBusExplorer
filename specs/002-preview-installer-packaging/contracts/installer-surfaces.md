@@ -23,7 +23,7 @@
 | Bundle ID | `com.servicebusexplorer.internal` (until renamed) |
 | Min OS | macOS 13.0 |
 | Signing | Developer ID Application + hardened runtime + Entitlements.plist |
-| Notarization | fastlane `notarize`; ASC API Key in CI; stapled |
+| Notarization | `xcrun notarytool` + `stapler`; ASC API Key in CI; stapled; fail-closed |
 | Primary | DMG is evaluator primary; zip optional |
 | Gatekeeper | Fresh Mac launch without `xattr` quarantine removal |
 

@@ -42,6 +42,14 @@ Invoke-Case 'dual-purpose Scope=perUserOrMachine (ALLUSERS=2 / per-user default)
     Assert-True ($wxs -match 'WixUI_Advanced') 'WixUI_Advanced for scope choice'
 }
 
+Invoke-Case 'ApplicationShortcut uses HKCU KeyPath (ICE57-safe dual-purpose pattern)' {
+    $wxs = Get-Content -Raw $wxsPath
+    Assert-True ($wxs -match 'Component Id="ApplicationShortcut"') 'ApplicationShortcut component'
+    # Shortcut component must not use HKMU keypath — ICE57: per-user Start Menu + ambiguous keypath.
+    Assert-True ($wxs -match '(?s)Component Id="ApplicationShortcut".*?Root="HKCU"[^>]*KeyPath="yes"') 'HKCU KeyPath on shortcut'
+    Assert-True ($wxs -notmatch '(?s)Component Id="ApplicationShortcut".*?Root="HKMU"') 'no HKMU on shortcut component'
+}
+
 Invoke-Case 'WiX project targets WiX SDK 4+' {
     Assert-True (Test-Path $wixProj) 'wixproj missing'
     $proj = Get-Content -Raw $wixProj

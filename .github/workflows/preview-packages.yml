@@ -1,5 +1,5 @@
 # Preview packages for the Avalonia (net10) app.
-# Windows: unsigned dual-purpose MSI. Linux: tar.gz. macOS: osx-arm64 DMG via fastlane notarize (fail-closed).
+# Windows: unsigned dual-purpose MSI. Linux: tar.gz. macOS: osx-arm64 DMG via notarytool notarize (fail-closed).
 name: preview-packages
 
 on:
@@ -94,9 +94,6 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Install fastlane
-        run: gem install fastlane --no-document
-
       # Fail-closed: any required secret missing → job fails; upload step never runs.
       - name: Require Apple signing + ASC API key secrets (fail-closed)
         id: apple
@@ -123,7 +120,7 @@ jobs:
           fi
           echo "secrets_ok=true" >> "$GITHUB_OUTPUT"
 
-      - name: Import Developer ID + ASC API key for fastlane
+      - name: Import Developer ID + ASC API key for notarytool
         env:
           MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
@@ -137,7 +134,7 @@ jobs:
           chmod +x scripts/ci/import-apple-signing.sh scripts/package-macos-internal.sh
           ./scripts/ci/import-apple-signing.sh
 
-      - name: Package signed DMG and fastlane notarize (osx-arm64)
+      - name: Package signed DMG and notarytool notarize (osx-arm64)
         env:
           RID: osx-arm64
           SKIP_LAUNCH_SMOKE: "1"

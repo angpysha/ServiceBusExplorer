@@ -41,6 +41,12 @@
       <Files Include="$(var.PublishDir)**" />
     </ComponentGroup>
 
+    <!--
+      Start Menu shortcut must use an HKCU keypath (not HKMU). ICE57 rejects
+      mixing per-user Start Menu data with a keypath that can be HKCU or HKLM.
+      Package Scope=perUserOrMachine still enables dual-purpose install;
+      ProgramMenuFolder redirects with the chosen ALLUSERS / MSIINSTALLPERUSER context.
+    -->
     <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder" Guid="B8D5F0A2-3C9E-4F7B-AD42-6E9F1B2C3D4E">
       <Shortcut
           Id="ApplicationStartMenuShortcut"
@@ -50,7 +56,7 @@
           WorkingDirectory="INSTALLFOLDER" />
       <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
       <RegistryValue
-          Root="HKMU"
+          Root="HKCU"
           Key="Software\ServiceBusExplorer\Preview"
           Name="installed"
           Type="integer"

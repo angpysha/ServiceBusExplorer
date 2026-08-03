@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # Build a self-contained macOS .app + UDZO .dmg for Service Bus Explorer (Avalonia).
-# Order: publish → Developer ID codesign → DMG → fastlane notarize + staple (fail-closed).
+# Order: publish → Developer ID codesign → DMG → notarytool notarize + stapler (fail-closed).
 #
 # Usage:
 #   ./scripts/package-macos-internal.sh
 #   RID=osx-arm64 ./scripts/package-macos-internal.sh
-#   NOTARIZE=1 ./scripts/package-macos-internal.sh   # requires Developer ID + ASC API key / fastlane
+#   NOTARIZE=1 ./scripts/package-macos-internal.sh   # requires Developer ID + ASC API key
 #
 # Optional env:
 #   RID                 osx-arm64 only for this feature (default: osx-arm64)
 #   SIGNING_IDENTITY    Developer ID Application identity (auto-detect if unset)
 #   ENTITLEMENTS        path to entitlements plist (default: src/App/Entitlements.plist)
-#   NOTARIZE            1 to notarize via fastlane (default: 0); fail-closed when secrets missing
-#   APP_STORE_CONNECT_API_KEY_PATH  fastlane API key JSON (from import-apple-signing.sh)
+#   NOTARIZE            1 to notarize via notarytool (default: 0); fail-closed when secrets missing
+#   APP_STORE_CONNECT_API_KEY_PATH  ASC API key JSON (from import-apple-signing.sh)
+#   APP_STORE_CONNECT_API_KEY_P8_PATH  .p8 path (preferred with KEY_ID + ISSUER_ID)
+#   APP_STORE_CONNECT_API_KEY_ID / APP_STORE_CONNECT_ISSUER_ID
 #   SKIP_LAUNCH_SMOKE   1 to skip GUI launch check (CI)
 #   OUTPUT_ROOT         override artifacts directory
 #
@@ -57,6 +59,8 @@ DMG_SOURCE="$OUTPUT_ROOT/dmg-source"
 MOUNT_POINT=""
 APP_PID=""
 
+ASC_TMP_P8=""
+
 cleanup() {
   if [[ -n "$APP_PID" ]] && kill -0 "$APP_PID" 2>/dev/null; then
     kill -TERM "$APP_PID" 2>/dev/null || true
@@ -65,6 +69,10 @@ cleanup() {
 
   if [[ -n "$MOUNT_POINT" ]] && mount | grep -Fq " on $MOUNT_POINT "; then
     hdiutil detach "$MOUNT_POINT" -force -quiet || true
+  fi
+
+  if [[ -n "${ASC_TMP_P8:-}" && -f "$ASC_TMP_P8" ]]; then
+    rm -f "$ASC_TMP_P8"
   fi
 
   rm -rf "$DMG_SOURCE"
@@ -134,24 +142,49 @@ file "$APP_DIR/Contents/MacOS/$EXECUTABLE_NAME" | grep -Eq "$EXPECTED_ARCH|unive
 sign_bundle() {
   local identity="$1"
   local use_runtime="$2"
+  local macos_dir="$APP_DIR/Contents/MacOS"
+  local main_exe="$macos_dir/$EXECUTABLE_NAME"
+  local -a nested_files=()
+  local fname depth_key
 
-  while IFS= read -r -d '' fname; do
+  # Sign one path. Developer ID path keeps hardened runtime + timestamp + entitlements.
+  codesign_one() {
+    local target="$1"
     if [[ "$use_runtime" == "1" ]]; then
       codesign --force --timestamp --options=runtime \
         --entitlements "$ENTITLEMENTS" \
-        --sign "$identity" "$fname"
+        --sign "$identity" "$target"
     else
-      codesign --force --sign "$identity" "$fname"
+      codesign --force --sign "$identity" "$target"
     fi
-  done < <(find "$APP_DIR/Contents/MacOS" -type f -print0)
+  }
 
-  if [[ "$use_runtime" == "1" ]]; then
-    codesign --force --timestamp --options=runtime \
-      --entitlements "$ENTITLEMENTS" \
-      --sign "$identity" "$APP_DIR"
-  else
-    codesign --force --sign "$identity" "$APP_DIR"
+  # .NET self-contained apps must be signed inside-out:
+  #   1) nested MacOS files (deepest-first), excluding the main executable
+  #   2) Contents/MacOS/$EXECUTABLE_NAME
+  #   3) the outer .app bundle
+  # Do not rely on codesign --deep as the only signing pass (Avalonia/Apple guidance).
+  # --deep is used below for verification only.
+  while IFS= read -r -d '' fname; do
+    [[ "$fname" == "$main_exe" ]] && continue
+    nested_files+=("$fname")
+  done < <(find "$macos_dir" -type f -print0)
+
+  if ((${#nested_files[@]} > 0)); then
+    while IFS=$'\t' read -r depth_key fname; do
+      [[ -n "$fname" ]] || continue
+      codesign_one "$fname"
+    done < <(
+      for fname in "${nested_files[@]}"; do
+        depth_key="${fname//[^\/]/}"
+        # Lower sort key => deeper path (more slashes).
+        printf '%03d\t%s\n' "$((999 - ${#depth_key}))" "$fname"
+      done | LC_ALL=C sort
+    )
   fi
+
+  codesign_one "$main_exe"
+  codesign_one "$APP_DIR"
 
   codesign --verify --deep --strict --verbose=1 "$APP_DIR"
 }
@@ -196,38 +229,135 @@ hdiutil create \
   -ov \
   "$DMG_PATH"
 
+# Resolve ASC API key material for notarytool (P8 + key-id + issuer). Prefer explicit
+# env from import-apple-signing.sh; fall back to extracting from ASC API key JSON.
+resolve_asc_notary_creds() {
+  ASC_KEY_ID="${APP_STORE_CONNECT_API_KEY_ID:-}"
+  ASC_ISSUER_ID="${APP_STORE_CONNECT_ISSUER_ID:-}"
+  ASC_KEY_PATH="${APP_STORE_CONNECT_API_KEY_P8_PATH:-}"
+  ASC_TMP_P8=""
+
+  if [[ -n "$ASC_KEY_ID" && -n "$ASC_ISSUER_ID" && -n "$ASC_KEY_PATH" && -f "$ASC_KEY_PATH" ]]; then
+    return 0
+  fi
+
+  if [[ -z "${APP_STORE_CONNECT_API_KEY_PATH:-}" || ! -f "$APP_STORE_CONNECT_API_KEY_PATH" ]]; then
+    echo "NOTARIZE=1 requires ASC API key (APP_STORE_CONNECT_API_KEY_P8_PATH + KEY_ID + ISSUER_ID, or APP_STORE_CONNECT_API_KEY_PATH JSON)." >&2
+    return 1
+  fi
+
+  ASC_TMP_P8="$(mktemp "${TMPDIR:-/tmp}/sbe-asc-key.XXXXXX.p8")"
+  # Extract key_id / issuer_id / PEM from JSON without echoing secrets.
+  {
+    read -r ASC_KEY_ID
+    read -r ASC_ISSUER_ID
+  } < <(
+    python3 - "$APP_STORE_CONNECT_API_KEY_PATH" "$ASC_TMP_P8" <<'PY'
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, encoding="utf-8") as f:
+    payload = json.load(f)
+for required in ("key_id", "issuer_id", "key"):
+    if required not in payload or not str(payload[required]).strip():
+        raise SystemExit(f"ASC API key JSON missing {required}")
+with open(dst, "w", encoding="utf-8") as out:
+    out.write(payload["key"])
+print(payload["key_id"])
+print(payload["issuer_id"])
+PY
+  )
+  chmod 600 "$ASC_TMP_P8"
+  ASC_KEY_PATH="$ASC_TMP_P8"
+}
+
+# Submit DMG to Apple notarytool, require Accepted, staple, and validate (fail-closed).
+# Avoids fastlane `notarize` JSON parsing fragility when notarytool mixes logs + JSON.
+notarize_and_staple_dmg() {
+  local dmg="$1"
+  local submit_log status
+
+  echo "Notarizing DMG via notarytool (sign → DMG → notarize → staple)..."
+  submit_log="$(mktemp "${TMPDIR:-/tmp}/sbe-notary.XXXXXX.log")"
+  # Capture all output; --output-format json may still include progress lines on some Xcode versions.
+  if ! xcrun notarytool submit "$dmg" \
+    --key "$ASC_KEY_PATH" \
+    --key-id "$ASC_KEY_ID" \
+    --issuer "$ASC_ISSUER_ID" \
+    --wait \
+    --output-format json \
+    >"$submit_log" 2>&1; then
+    echo "notarytool submit failed (fail-closed). Log (secrets redacted if present):" >&2
+    sed -E 's/(key|issuer|password|token)[=:][^[:space:]]+/\1=***/Ig' "$submit_log" >&2 || true
+    rm -f "$submit_log"
+    return 1
+  fi
+
+  status="$(
+    python3 - "$submit_log" <<'PY'
+import json, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+decoder = json.JSONDecoder()
+payload = None
+# Prefer pure JSON; otherwise decode the last JSON object embedded in mixed output.
+try:
+    candidate = json.loads(text.strip())
+    if isinstance(candidate, dict) and "status" in candidate:
+        payload = candidate
+except json.JSONDecodeError:
+    pass
+if payload is None:
+    for idx in range(len(text) - 1, -1, -1):
+        if text[idx] != "{":
+            continue
+        try:
+            candidate, _ = decoder.raw_decode(text[idx:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, dict) and "status" in candidate:
+            payload = candidate
+            break
+if payload is None:
+    raise SystemExit("Unable to parse notarytool JSON (no status object found)")
+print(payload["status"])
+PY
+  )" || {
+    echo "Failed to parse notarytool result (fail-closed)." >&2
+    sed -E 's/(key|issuer|password|token)[=:][^[:space:]]+/\1=***/Ig' "$submit_log" >&2 || true
+    rm -f "$submit_log"
+    return 1
+  }
+
+  echo "notarytool status: $status"
+  if [[ "$status" != "Accepted" ]]; then
+    echo "Notarization not Accepted (got: ${status:-empty}); fail-closed." >&2
+    sed -E 's/(key|issuer|password|token)[=:][^[:space:]]+/\1=***/Ig' "$submit_log" >&2 || true
+    rm -f "$submit_log"
+    return 1
+  fi
+  rm -f "$submit_log"
+
+  xcrun stapler staple "$dmg"
+  xcrun stapler validate "$dmg"
+}
+
 if [[ "$NOTARIZE" == "1" ]]; then
   if [[ "$MANIFEST_SIGNING" != "developer-id" ]]; then
     echo "NOTARIZE=1 requires Developer ID signing before DMG notarization (fail-closed)." >&2
     exit 1
   fi
 
-  if [[ -z "${APP_STORE_CONNECT_API_KEY_PATH:-}" ]]; then
-    echo "NOTARIZE=1 requires APP_STORE_CONNECT_API_KEY_PATH (from scripts/ci/import-apple-signing.sh)." >&2
-    exit 1
-  fi
-  if [[ ! -f "$APP_STORE_CONNECT_API_KEY_PATH" ]]; then
-    echo "ASC API key file missing: $APP_STORE_CONNECT_API_KEY_PATH (fail-closed)." >&2
-    exit 1
-  fi
+  ASC_KEY_ID=""
+  ASC_ISSUER_ID=""
+  ASC_KEY_PATH=""
 
-  if ! command -v bundle >/dev/null 2>&1 && ! command -v fastlane >/dev/null 2>&1; then
-    echo "fastlane (or bundler) is required for notarize (fail-closed)." >&2
+  if ! resolve_asc_notary_creds; then
     exit 1
   fi
 
-  echo "Notarizing DMG via fastlane (sign → DMG → notarize)..."
-  export DMG_PATH BUNDLE_ID
-  export APP_STORE_CONNECT_API_KEY_PATH
-  pushd "$ROOT_DIR" >/dev/null
-  if command -v bundle >/dev/null 2>&1 && [[ -f "$ROOT_DIR/Gemfile" ]]; then
-    bundle exec fastlane macos_notarize_dmg dmg_path:"$DMG_PATH" bundle_id:"$BUNDLE_ID" api_key_path:"$APP_STORE_CONNECT_API_KEY_PATH"
-  else
-    fastlane macos_notarize_dmg dmg_path:"$DMG_PATH" bundle_id:"$BUNDLE_ID" api_key_path:"$APP_STORE_CONNECT_API_KEY_PATH"
+  if ! notarize_and_staple_dmg "$DMG_PATH"; then
+    exit 1
   fi
-  popd >/dev/null
 
-  xcrun stapler validate "$DMG_PATH"
   NOTARIZATION_STATE="notarized and stapled"
   MANIFEST_NOTARIZATION="notarized"
 fi
