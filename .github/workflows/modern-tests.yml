@@ -7,12 +7,10 @@ on:
     branches:
       - main
       - master
-      - feature/avalonia-servicebus-mvp
   pull_request:
     branches:
       - main
       - master
-      - feature/avalonia-servicebus-mvp
   workflow_dispatch:
 
 env:
