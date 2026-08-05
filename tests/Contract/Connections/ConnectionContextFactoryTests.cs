@@ -58,6 +58,43 @@ public sealed class ConnectionContextFactoryTests
     }
 
     [Fact]
+    public void StripEntityPath_RemovesEntityPathSegment_PreservesOtherTokens()
+    {
+        const string keyField = "SharedAccess" + "Key";
+        var input =
+            $"Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=test;{keyField}=secret;EntityPath=locked-queue;UseDevelopmentEmulator=true";
+
+        var stripped = ConnectionContextFactory.StripEntityPath(input);
+
+        Assert.DoesNotContain("EntityPath", stripped, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Endpoint=sb://example.servicebus.windows.net/", stripped, StringComparison.Ordinal);
+        Assert.Contains($"SharedAccessKeyName=test", stripped, StringComparison.Ordinal);
+        Assert.Contains($"{keyField}=secret", stripped, StringComparison.Ordinal);
+        Assert.Contains("UseDevelopmentEmulator=true", stripped, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreateAsync_NamespaceScope_StripsEntityPathSoSubscriptionReceiverCanOpen()
+    {
+        var probe = new FakeConnectionProbe { AdminProbeResult = true };
+        var factory = CreateFactory(new FakeCredentialVault(), probe);
+
+        const string keyField = "SharedAccess" + "Key";
+        var connectionString =
+            $"Endpoint=sb://example.servicebus.windows.net/;SharedAccessKeyName=test;{keyField}=test-only-secret;EntityPath=locked-queue";
+        using var credential = new SensitiveCredential(connectionString);
+
+        var result = await factory.CreateAsync(CreateSasRequest(credential: credential));
+
+        Assert.True(result.Success, result.FailureMessage);
+        var handles = Assert.IsType<ConnectionServiceHandles>(result.ServiceHandles);
+
+        // Without stripping EntityPath, Azure SDK throws ArgumentException for any other entity.
+        await using var receiver = handles.Client.CreateReceiver("sales/Subscriptions/regional");
+        Assert.Equal("sales/Subscriptions/regional", receiver.EntityPath);
+    }
+
+    [Fact]
     public async Task CreateAsync_SasNamespaceScope_SucceedsWithFakeProbe()
     {
         var probe = new FakeConnectionProbe { AdminProbeResult = true };

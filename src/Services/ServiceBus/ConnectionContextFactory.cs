@@ -70,12 +70,19 @@ public sealed class ConnectionContextFactory : IConnectionContextFactory
             if (request.AuthMode == ServiceBusAuthMode.Sas)
             {
                 var connectionString = resolvedCredential!.Reveal();
-                var messagingConnectionString = ResolveMessagingConnectionString(connectionString);
+                // Namespace-scoped clients must not carry EntityPath: Azure SDK rejects
+                // CreateReceiver/CreateSender for any other entity (e.g. subscriptions).
+                var messagingConnectionString = PrepareSasConnectionString(
+                    connectionString,
+                    request.Scope,
+                    forAdministration: false);
                 client = new ServiceBusClient(messagingConnectionString);
                 if (request.Scope == ConnectionScope.Namespace)
                 {
-                    var administrationConnectionString =
-                        ResolveAdministrationConnectionString(connectionString);
+                    var administrationConnectionString = PrepareSasConnectionString(
+                        connectionString,
+                        request.Scope,
+                        forAdministration: true);
                     adminClient = new ServiceBusAdministrationClient(administrationConnectionString);
                     probe = _probeOverride ?? new AdministrationClientConnectionProbe(adminClient);
                 }
@@ -309,6 +316,23 @@ public sealed class ConnectionContextFactory : IConnectionContextFactory
     }
 
     /// <summary>
+    /// Rewrites emulator ports and strips <c>EntityPath</c> for namespace-scoped SAS clients.
+    /// </summary>
+    private static string PrepareSasConnectionString(
+        string connectionString,
+        ConnectionScope scope,
+        bool forAdministration)
+    {
+        var prepared = forAdministration
+            ? ResolveAdministrationConnectionString(connectionString)
+            : ResolveMessagingConnectionString(connectionString);
+
+        return scope == ConnectionScope.Namespace
+            ? StripEntityPath(prepared)
+            : prepared;
+    }
+
+    /// <summary>
     /// Messaging uses the emulator AMQP endpoint (no admin HTTP port).
     /// </summary>
     private static string ResolveMessagingConnectionString(string connectionString) =>
@@ -323,6 +347,33 @@ public sealed class ConnectionContextFactory : IConnectionContextFactory
         IsDevelopmentEmulatorConnectionString(connectionString)
             ? RewriteEndpointPort(connectionString, EmulatorAdministrationPort)
             : connectionString;
+
+    /// <summary>
+    /// Removes <c>EntityPath</c> so a namespace-scoped client can target any queue/topic/subscription.
+    /// </summary>
+    internal static string StripEntityPath(string connectionString)
+    {
+        var parts = connectionString.Split(';');
+        var kept = new List<string>(parts.Length);
+        foreach (var part in parts)
+        {
+            var trimmed = part.Trim();
+            if (trimmed.Length == 0)
+                continue;
+
+            var separator = trimmed.IndexOf('=');
+            if (separator > 0)
+            {
+                var key = trimmed[..separator].Trim();
+                if (key.Equals("EntityPath", StringComparison.OrdinalIgnoreCase))
+                    continue;
+            }
+
+            kept.Add(trimmed);
+        }
+
+        return string.Join(';', kept);
+    }
 
     private static string RewriteEndpointPort(string connectionString, int? port)
     {
